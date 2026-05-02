@@ -855,14 +855,14 @@ const Career = () => {
       {/* <Navbar /> */}
       <div className="max-w-4xl mx-auto py-12 px-6">
         {alreadyApplied.open ? (
-          <div className="mb-6 rounded-2xl border border-orange-200 bg-orange-50 px-5 py-4">
+          <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-semibold text-orange-900">Application already exists</p>
-                <p className="mt-1 text-sm text-orange-800">
+                <p className="font-semibold text-blue-950">Application already exists</p>
+                <p className="mt-1 text-sm text-blue-900">
                   {alreadyApplied.message}
                   {alreadyApplied.appliedOn ? (
-                    <span className="ml-2 text-orange-700">(Applied on: {alreadyApplied.appliedOn})</span>
+                    <span className="ml-2 text-blue-800">(Applied on: {alreadyApplied.appliedOn})</span>
                   ) : null}
                 </p>
               </div>
@@ -885,7 +885,7 @@ const Career = () => {
                 <button
                   type="button"
                   onClick={() => setAlreadyApplied({ open: false, message: "", appliedOn: "" })}
-                  className="rounded-xl border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-900 hover:bg-orange-100"
+                  className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-950 hover:bg-blue-100"
                 >
                   Dismiss
                 </button>
@@ -1092,7 +1092,7 @@ const Career = () => {
           {currentStep === 0 && (
           <Section color="bg-gradient-to-r from-blue-50 to-white/80">
             <h3 className="text-2xl font-semibold border-b pb-2 text-center">
-              <span style={{ color: "orange" }}>Personal</span>{" "}
+              <span className="text-blue-600 font-medium">Personal</span>{" "}
               <span style={{ color: "black" }}>Information</span>
             </h3>
 
@@ -1133,7 +1133,7 @@ const Career = () => {
 
             <h3 className="text-2xl font-semibold border-b pb-2 text-center">
               <span className="text-black">Portfolio &</span>{" "}
-              <span className="text-orange-500">Experience</span>
+              <span className="text-blue-600">Experience</span>
             </h3>
 
             {/* Qualification + Experience */}
@@ -1171,7 +1171,7 @@ const Career = () => {
                     onChange={handleFirstRoleSelectChange}
                     aria-label="Select role"
                     className={`w-full min-w-0 border rounded-xl px-4 py-2 text-sm
-                      transition-all focus:ring-2 focus:ring-orange-400
+                      transition-all focus:ring-2 focus:ring-blue-500
                       ${errors.role ? "border-red-500" : "border-gray-300"}`}
                   >
                     <option value="">Choose role</option>
@@ -1194,7 +1194,7 @@ const Career = () => {
                       setSelectedRole("");
                       setFormData((p) => ({ ...p, subjects: "" }));
                     }}
-                    className="shrink-0 px-4 rounded-xl bg-orange-100 text-orange-700 hover:bg-orange-200 transition"
+                    className="shrink-0 px-4 rounded-xl bg-blue-100 text-blue-800 hover:bg-blue-200 transition"
                     title="Reset role"
                   >
                     Change
@@ -1431,7 +1431,7 @@ const Section = ({ title, children, color }) => (
 
 
 const inputFieldBaseClass =
-  "w-full rounded-lg border bg-white px-3 py-1.5 text-sm shadow-sm outline-none transition placeholder:text-gray-400 h-[42px] focus:border-orange-400 focus:ring-2 focus:ring-orange-500/25";
+  "w-full rounded-lg border bg-white px-3 py-1.5 text-sm shadow-sm outline-none transition placeholder:text-gray-400 h-[42px] focus:border-blue-500 focus:ring-2 focus:ring-blue-600/25";
 
 const Input = ({
   name,
@@ -1512,7 +1512,7 @@ const SalaryLpaField = ({
       </div>
     </div>
     {error ? <p className="text-red-500 text-sm mt-1">{error}</p> : null}
-    {!error && help ? <p className="text-amber-600 text-sm mt-1">{help}</p> : null}
+    {!error && help ? <p className="text-sky-700 text-sm mt-1">{help}</p> : null}
   </div>
 );
 
@@ -1589,7 +1589,7 @@ function CityInput({
               {filteredCities.length >= CITY_DROPDOWN_CAP && (
                 <li
                   role="presentation"
-                  className="border-b border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                  className="border-b border-blue-100 bg-blue-50 px-3 py-2 text-xs text-slate-900"
                 >
                   Showing first {CITY_DROPDOWN_CAP} matches — keep typing to narrow the list.
                 </li>
@@ -1599,7 +1599,7 @@ function CityInput({
                   <button
                     type="button"
                     role="option"
-                    className="flex w-full items-baseline justify-between gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-orange-50 focus-visible:bg-orange-50 focus-visible:outline-none"
+                    className="flex w-full items-baseline justify-between gap-3 px-3 py-2.5 text-left text-sm transition hover:bg-blue-50 focus-visible:bg-blue-50 focus-visible:outline-none"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       setFormData((prev) => ({

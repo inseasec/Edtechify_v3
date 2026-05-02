@@ -53,15 +53,6 @@ export default function EditUser({ isOpen, isClose, refreshUser }) {
         <h3 className="text-lg font-semibold text-slate-800 mb-4">Edit profile</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm text-slate-600">Name</label>
-            <input
-              name="userName"
-              value={form.userName}
-              onChange={handleChange}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
             <label className="text-sm text-slate-600">Email</label>
             <input
               name="email"
@@ -90,7 +81,7 @@ export default function EditUser({ isOpen, isClose, refreshUser }) {
             >
               Cancel
             </button>
-            <button type="submit" className="rounded-md bg-orange-500 px-4 py-2 text-sm text-white">
+            <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white">
               Save
             </button>
           </div>

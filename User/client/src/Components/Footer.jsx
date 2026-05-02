@@ -32,12 +32,14 @@ export default function Footer() {
 
   if (status === "pending" || !organisation) {
     return (
-      <div className="bg-[#1a1a1a] py-4 text-white text-center">Loading...</div>
+      <div className="border-t border-sky-200/80 bg-gradient-to-b from-slate-700 to-slate-800 py-4 text-center text-white">
+        Loading...
+      </div>
     );
   }
 
   return (
-    <div className="bg-[#1a1a1a]">
+    <div className="border-t border-sky-900/30 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-900">
       <div className="w-full max-w-[1300px] mx-auto py-2 flex flex-col md:flex-row justify-around text-white">
         <div className="mt-8 md:mt-8 md:w-[20%] flex justify-center">
           <Link to="/" aria-label="Home">

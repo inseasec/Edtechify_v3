@@ -1042,7 +1042,7 @@ function Signup() {
         <div className="relative z-10 w-full h-full min-h-[40vh] md:min-h-screen flex flex-col">
           <p className="text-white text-5xl font-semibold text-center pt-[30%]">
             {authSideTitlePrimary}{" "}
-            <span className="text-orange-600">{authSideTitleAccent}</span>
+            <span className="text-blue-700">{authSideTitleAccent}</span>
           </p>
           <AuthHeroTagline
             text={authSideTagline}

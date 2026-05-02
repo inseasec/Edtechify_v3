@@ -1,0 +1,201 @@
+package com.RankwellClient.services;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.RankwellClient.dto.LaunchPortalRequest;
+import com.RankwellClient.dto.PortalLaunchResponse;
+import com.RankwellClient.entity.EdukifyClient;
+import com.RankwellClient.repository.EdukifyClientRepository;
+
+@Service
+public class EdukifyClientService {
+
+	private static final Set<String> RESERVED = Set.of(
+			"www", "admin", "api", "mail", "ftp", "app", "cdn", "static", "support",
+			"help", "blog", "status", "localhost", "test", "staging", "dev");
+
+	private final EdukifyClientRepository eduClientRepository;
+
+	@Value("${EDUKIFY_PORTAL_BASE_DOMAIN:edukify.com}")
+	private String portalBaseDomain;
+
+	public EdukifyClientService(EdukifyClientRepository eduClientRepository) {
+		this.eduClientRepository = eduClientRepository;
+	}
+
+	public static String slugifyCompanyName(String companyName) {
+		if (companyName == null || companyName.isBlank()) {
+			return "portal";
+		}
+		String s = companyName.toLowerCase(Locale.ROOT).trim()
+				.replaceAll("[^a-z0-9]+", "-")
+				.replaceAll("^-+|-+$", "");
+		if (s.isEmpty()) {
+			return "portal";
+		}
+		if (s.length() > 63) {
+			s = s.substring(0, 63).replaceAll("-+$", "");
+		}
+		return s;
+	}
+
+	public String normalizeSubdomain(String raw) {
+		if (raw == null || raw.isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Subdomain is required");
+		}
+		String s = raw.toLowerCase(Locale.ROOT).trim()
+				.replaceAll("\\.edukify\\.com\\s*$", "")
+				.replaceAll("^https?://", "")
+				.replaceAll("/.*$", "");
+		s = s.replaceAll("[^a-z0-9-]", "");
+		s = s.replaceAll("^-+|-+$", "");
+		if (s.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid subdomain");
+		}
+		if (s.length() > 63) {
+			s = s.substring(0, 63).replaceAll("-+$", "");
+		}
+		if (!s.matches("[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Subdomain must be 1–63 characters: letters, numbers, hyphens");
+		}
+		if (RESERVED.contains(s)) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "This subdomain is reserved");
+		}
+		return s;
+	}
+
+	public boolean isSubdomainAvailable(String subdomain) {
+		return tryNormalizeSubdomain(subdomain)
+				.map(candidate -> !eduClientRepository.existsBySubdomain(candidate))
+				.orElse(false);
+	}
+
+	/** Normalizes only; returns empty if invalid or reserved. Does not throw. */
+	public Optional<String> tryNormalizeSubdomain(String raw) {
+		if (raw == null || raw.isBlank()) {
+			return Optional.empty();
+		}
+		String s = raw.toLowerCase(Locale.ROOT).trim()
+				.replaceAll("\\.edukify\\.com\\s*$", "")
+				.replaceAll("^https?://", "")
+				.replaceAll("/.*$", "");
+		s = s.replaceAll("[^a-z0-9-]", "");
+		s = s.replaceAll("^-+|-+$", "");
+		if (s.isEmpty() || s.length() > 63) {
+			return Optional.empty();
+		}
+		if (!s.matches("[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?")) {
+			return Optional.empty();
+		}
+		if (RESERVED.contains(s)) {
+			return Optional.empty();
+		}
+		return Optional.of(s);
+	}
+
+	public boolean existsBySubdomain(String normalizedSubdomain) {
+		return eduClientRepository.existsBySubdomain(normalizedSubdomain);
+	}
+
+	public Optional<PortalLaunchResponse> findForUser(Long userId) {
+		return eduClientRepository.findByUserId(userId).map(this::toResponse);
+	}
+
+	public PortalLaunchResponse toResponse(EdukifyClient c) {
+		PortalLaunchResponse r = new PortalLaunchResponse();
+		r.setId(c.getId());
+		r.setContactPersonName(c.getContactPersonName());
+		r.setCompanyName(c.getCompanyName());
+		r.setAddress(c.getAddress());
+		r.setPhone(c.getPhone());
+		r.setEmail(c.getEmail());
+		r.setSubdomain(c.getSubdomain());
+		r.setSubscription(c.getSubscription());
+		Long usedBytes = c.getStorageUsedBytes() != null ? c.getStorageUsedBytes() : 0L;
+		r.setStorageUsedBytes(usedBytes);
+
+		String sub = c.getSubscription() == null ? "" : c.getSubscription().trim();
+		boolean isTrial = sub.isEmpty() || "trial".equalsIgnoreCase(sub);
+
+		Integer limitDays = c.getTrialLimitDays();
+		Integer limitMb = c.getTrialLimitStorageMb();
+
+		if (isTrial) {
+			int effectiveDays = (limitDays != null && limitDays > 0) ? limitDays : 14;
+			int effectiveMb = (limitMb != null && limitMb > 0) ? limitMb : 512;
+			r.setStorageAllocatedMb(effectiveMb);
+			Instant launched = c.getPortalLaunchedAt();
+			if (launched != null && effectiveDays >= 1) {
+				LocalDate anchor = launched.atZone(ZoneOffset.UTC).toLocalDate();
+				LocalDate endInclusive = anchor.plusDays((long) effectiveDays - 1);
+				r.setTrialExpiresOn(endInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE));
+			} else {
+				r.setTrialExpiresOn(null);
+			}
+		} else {
+			r.setTrialExpiresOn(null);
+			r.setStorageAllocatedMb(limitMb != null && limitMb > 0 ? limitMb : null);
+		}
+
+		String host = c.getSubdomain() + "." + portalBaseDomain;
+		r.setSiteUrl("https://" + host + "/");
+		r.setAdminUrl("https://" + host + "/admin");
+		return r;
+	}
+
+	public PortalLaunchResponse launch(Long userId, LaunchPortalRequest req) {
+		if (eduClientRepository.findByUserId(userId).isPresent()) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "You have already launched your portal");
+		}
+		String subdomain = normalizeSubdomain(req.getSubdomain());
+		if (eduClientRepository.existsBySubdomain(subdomain)) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "This subdomain is already taken");
+		}
+		if (req.getContactPersonName() == null || req.getContactPersonName().isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contact name is required");
+		}
+		if (req.getCompanyName() == null || req.getCompanyName().isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company name is required");
+		}
+
+		EdukifyClient c = new EdukifyClient();
+		c.setUserId(userId);
+		c.setContactPersonName(req.getContactPersonName().trim());
+		c.setCompanyName(req.getCompanyName().trim());
+		c.setAddress(req.getAddress() != null ? req.getAddress().trim() : null);
+		c.setPhone(req.getPhone() != null ? req.getPhone().trim() : null);
+		c.setEmail(req.getEmail() != null ? req.getEmail().trim().toLowerCase(Locale.ROOT) : null);
+		c.setSubdomain(subdomain);
+		c.setSubscription("Trial");
+		c.setPortalLaunchedAt(Instant.now());
+
+		EdukifyClient saved = eduClientRepository.save(c);
+		return toResponse(saved);
+	}
+
+	public static Long userIdFromAuth(Authentication auth) {
+		if (auth == null || !(auth.getPrincipal() instanceof User)) {
+			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+		}
+		User u = (User) auth.getPrincipal();
+		try {
+			return Long.parseLong(u.getUsername());
+		} catch (NumberFormatException e) {
+			throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized");
+		}
+	}
+}

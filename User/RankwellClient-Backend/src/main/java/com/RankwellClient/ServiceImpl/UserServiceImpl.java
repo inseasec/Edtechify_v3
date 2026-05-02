@@ -36,8 +36,8 @@ public class UserServiceImpl implements UserService {
 
     private final StoragePathResolver pathResolver;
 
-    public UserServiceImpl(StoragePathResolver pathResolver){
-          this.pathResolver=pathResolver; 
+    public UserServiceImpl(StoragePathResolver pathResolver) {
+          this.pathResolver=pathResolver;
       }
 
 	 private String UPLOAD_DIR ="accounts";

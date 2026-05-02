@@ -17,7 +17,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 
 function MainLayout() {
   return (
-    <div className="overflow-hidden m-0 p-0 min-h-screen flex flex-col">
+    <div className="m-0 flex min-h-screen flex-col p-0">
       <Toaster position="top-center" toastOptions={{ duration: 4000 }} />
       <Navbar />
       <main className="flex-1 w-full min-w-0">

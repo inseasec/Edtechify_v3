@@ -30,7 +30,6 @@ public class FacebookAuthServiceImpl implements FacebookAuthService {
 	private final JwtUtil jwtUtil;
 	private final ObjectMapper objectMapper;
 	private final HttpClient httpClient;
-
 	public FacebookAuthServiceImpl(
 			UserRepository userRepository,
 			OAuthConfigRepository oauthConfigRepository,

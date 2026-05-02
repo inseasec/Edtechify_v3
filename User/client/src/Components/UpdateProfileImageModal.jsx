@@ -83,7 +83,7 @@ export default function UpdateProfileImageModal({
             className="group relative grid h-24 w-24 place-items-center rounded-full bg-slate-200 disabled:opacity-60"
             aria-label={selectedFile ? "Upload selected image" : "Choose image"}
           >
-            <span className="grid h-14 w-14 place-items-center rounded-full bg-orange-500 text-white shadow">
+            <span className="grid h-14 w-14 place-items-center rounded-full bg-blue-600 text-white shadow">
               <i className="ri-image-edit-fill text-xl" />
             </span>
           </button>

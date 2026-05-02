@@ -25,7 +25,6 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
 	private final OAuthConfigRepository oauthConfigRepository;
 	private final BCryptPasswordEncoder passwordEncoder;
 	private final JwtUtil jwtUtil;
-
 	public GoogleAuthServiceImpl(
 			UserRepository userRepository,
 			OAuthConfigRepository oauthConfigRepository,

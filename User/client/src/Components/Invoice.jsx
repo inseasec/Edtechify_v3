@@ -156,7 +156,7 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
           <div className='relative flex mb-6'>
             <button
               onClick={downloadInvoice}
-              className="px-4 py-2 bg-orange-500 text-white rounded-md"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md"
             >
               Download Invoice
             </button>

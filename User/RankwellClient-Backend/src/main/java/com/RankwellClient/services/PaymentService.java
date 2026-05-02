@@ -10,7 +10,7 @@ public interface PaymentService {
 
 	String createOrder(Map<String,Object> paymentInfo);
 
-	ResponseEntity<?> verifyPayment(RazorpayResponse response) throws Exception;
+	ResponseEntity<?> verifyPayment(RazorpayResponse response);
 	
     
 

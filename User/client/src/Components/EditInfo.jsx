@@ -117,7 +117,7 @@ export default function EditInfo({ onClose, initialData }) {
           >
             Cancel
           </button>
-          <button type="submit" className="rounded-md bg-orange-500 px-4 py-2 text-sm text-white">
+          <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white">
             Save
           </button>
         </div>

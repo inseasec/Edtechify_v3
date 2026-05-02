@@ -9,7 +9,7 @@ export default function ProgressBar({ progress = 0, text = "Loading...", isUploa
         <p className="text-sm text-slate-700 mb-2">{text}</p>
         <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
           <div
-            className="h-full bg-orange-500 transition-all duration-300 rounded-full"
+            className="h-full bg-blue-600 transition-all duration-300 rounded-full"
             style={{ width: `${pct}%` }}
           />
         </div>

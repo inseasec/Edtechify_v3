@@ -25,7 +25,7 @@ public class PaymentController {
     }
     
     @PostMapping("/verifyPayment")
-    public ResponseEntity<?> verifyPayment(@RequestBody RazorpayResponse response) throws Exception {
+    public ResponseEntity<?> verifyPayment(@RequestBody RazorpayResponse response) {
     	return paymentService.verifyPayment(response);
     }
     

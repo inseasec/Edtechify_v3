@@ -81,7 +81,7 @@ const BillingInvoices = () => {
       ) : (
         <table className="min-w-full bg-white border border-gray-300 rounded-lg overflow-hidden shadow-md">
           <thead>
-            <tr className="bg-[#F97316] text-sm text-white">
+            <tr className="bg-[#2563eb] text-sm text-white">
               <th className="px-2 py-2">Invoice Id</th>
               <th className="px-2 py-2">Invoice Date</th>
               <th className="px-2 py-2">Course Name</th>

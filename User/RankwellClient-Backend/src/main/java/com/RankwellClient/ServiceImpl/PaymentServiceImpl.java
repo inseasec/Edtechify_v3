@@ -5,9 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -25,6 +22,8 @@ import com.RankwellClient.services.PaymentConfigService;
 import com.RankwellClient.services.PaymentService;
 import com.razorpay.Order;
 import com.razorpay.RazorpayClient;
+import com.razorpay.RazorpayException;
+import com.razorpay.Utils;
 
 @Service
 public class PaymentServiceImpl implements PaymentService{
@@ -53,8 +52,8 @@ public class PaymentServiceImpl implements PaymentService{
 					throw new RuntimeException("Razorpay configuration not found. Please configure it from Admin Panel.");
 				}
 
-				String apiKey = config.getRazorpayKey();
-				String apiSecret = config.getRazorpaySecret();
+				String apiKey = normalizeCredential(config.getRazorpayKey());
+				String apiSecret = normalizeCredential(config.getRazorpaySecret());
 
 				RazorpayClient razorpay = new RazorpayClient(apiKey, apiSecret);
 				// RazorpayClient razorpay = new RazorpayClient("rzp_test_SRmOa96nhuOlGO", "4oGHUb2JLlpp4Q2U1eoBFhWP"); // Akshay rezerpay test account
@@ -123,51 +122,58 @@ public class PaymentServiceImpl implements PaymentService{
 	}
 
 	@Override
-	public ResponseEntity<?> verifyPayment(RazorpayResponse response) throws Exception {
-		   String orderId = response.getOrderId();
-	        String paymentId = response.getPaymentId();
-	        String signature = response.getSignature();
+	public ResponseEntity<?> verifyPayment(RazorpayResponse response) {
+	        String orderId = response.getOrderId() != null ? response.getOrderId().trim() : null;
+	        String paymentId = response.getPaymentId() != null ? response.getPaymentId().trim() : null;
+	        String signature = response.getSignature() != null ? response.getSignature().trim() : null;
 
-			PaymentGatewayConfig config = paymentConfigService.getConfig();
-				if (config == null) {
-					throw new RuntimeException("Razorpay configuration not found. Please configure it from Admin Panel.");
-				}
-				String apiSecret = config.getRazorpaySecret();
+	        if (orderId == null || orderId.isEmpty()
+	                || paymentId == null || paymentId.isEmpty()
+	                || signature == null || signature.isEmpty()) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Missing order id, payment id, or signature");
+	        }
 
-	        //Generate expected signature using orderId and paymentId 
-	        // String generatedSignature = hmacSHA256(orderId + "|" + paymentId, "4oGHUb2JLlpp4Q2U1eoBFhWP");
-			String generatedSignature = hmacSHA256(orderId + "|" + paymentId, apiSecret);
+	        PaymentGatewayConfig config = paymentConfigService.getConfig();
+	        if (config == null) {
+	            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+	                    .body("Razorpay configuration not found. Please configure it from Admin Panel.");
+	        }
+	        String apiSecret = normalizeCredential(config.getRazorpaySecret());
+	        if (apiSecret == null || apiSecret.isEmpty()) {
+	            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Razorpay secret not configured.");
+	        }
 
-	        //Compare with received signature
-	        if (generatedSignature.equals(signature)) {
-	        	  Payment payment = paymentRepository.findByOrderId(orderId);
-	              if (payment != null) {
-	                  payment.setStatus(PaymentStatus.PAID);
-	                  payment.setPaymentId(paymentId);
-	                  payment.setCreatedOn(LocalDateTime.now());
-	                  paymentRepository.save(payment);
-	                  invoiceService.generateInvoice(payment);
-	              }
+	        JSONObject attrs = new JSONObject();
+	        attrs.put("razorpay_order_id", orderId);
+	        attrs.put("razorpay_payment_id", paymentId);
+	        attrs.put("razorpay_signature", signature);
 
-	            return ResponseEntity.ok("Payment verified");
-	        } else {
+	        boolean legitimate;
+	        try {
+	            legitimate = Utils.verifyPaymentSignature(attrs, apiSecret);
+	        } catch (RazorpayException e) {
+	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Signature verification failed");
+	        }
+
+	        if (!legitimate) {
 	            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid signature");
 	        }
+
+	        Payment payment = paymentRepository.findByOrderId(orderId);
+	        if (payment != null) {
+	            payment.setStatus(PaymentStatus.PAID);
+	            payment.setPaymentId(paymentId);
+	            payment.setCreatedOn(LocalDateTime.now());
+	            paymentRepository.save(payment);
+	            invoiceService.generateInvoice(payment);
+	        }
+
+	        return ResponseEntity.ok("Payment verified");
 	}
 	
-	private String hmacSHA256(String data, String secret) throws Exception {
-        SecretKeySpec keySpec = new SecretKeySpec(secret.getBytes(), "HmacSHA256");
-        Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(keySpec);
-        byte[] result = mac.doFinal(data.getBytes());
-
-        // Convert to hex string 
-        StringBuilder sb = new StringBuilder();
-        for (byte b : result) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString();
-    }
+	private static String normalizeCredential(String value) {
+		return value != null ? value.trim() : null;
+	}
 	
 //	@Scheduled(fixedDelay  = 60000) // Every minute
     public void expireOldOrders() {

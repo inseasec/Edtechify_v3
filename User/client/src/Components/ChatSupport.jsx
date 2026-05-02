@@ -214,7 +214,7 @@ export default function ChatSupport() {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && openChat()}
-          className="bg-red-500 rounded-full text-white h-14 flex md:space-x-4 capitalize font-medium justify-center items-center py-1 text-lg w-12 md:w-auto px-3"
+          className="rounded-full bg-sky-500 px-3 py-1 text-lg font-medium capitalize text-white shadow-lg shadow-sky-500/30 transition-colors hover:bg-sky-400 h-14 flex md:space-x-4 justify-center items-center w-12 md:w-auto"
           aria-label="Open live chat"
         >
           <i className="ri-customer-service-2-fill text-3xl"></i>

@@ -124,8 +124,8 @@ export default function ChatBot() {
                     key={index}
                     className={`p-1 rounded-md ${
                       msg.sender === "user"
-                        ? "bg-orange-500 text-white w-40 absolute right-1"
-                        : "bg-white absolute left-1 border-2 border-orange-400 top-7 text-black"
+                        ? "bg-blue-600 text-white w-40 absolute right-1"
+                        : "bg-white absolute left-1 border-2 border-blue-500 top-7 text-black"
                     }`}
                   >
                     {msg.text}
@@ -147,7 +147,7 @@ export default function ChatBot() {
               />
               <button
                 onClick={handleSendMessage}
-                className="bg-orange-500 text-white w-[33px] h-[27px] rounded-full"
+                className="bg-blue-600 text-white w-[33px] h-[27px] rounded-full"
                 disabled={loading}
                 type="button"
               >

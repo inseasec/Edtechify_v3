@@ -1,13 +1,29 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import api from "../api";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 import { decodeToken } from "../authConfig"
 
+/** Backend returns Razorpay order as `order.toString()` → Axios often gives a JSON string, so `.id` is missing until parsed. */
+function parseCreateOrderPayload(data) {
+  if (data == null) return { error: "Empty order response." };
+  if (typeof data === "object" && data !== null && data.id != null) return { order: data };
+  if (typeof data === "string") {
+    const s = data.trim();
+    if (s.startsWith("Error:")) return { error: s };
+    try {
+      const parsed = JSON.parse(s);
+      if (parsed != null && parsed.id != null) return { order: parsed };
+    } catch {
+      /* ignore */
+    }
+    return { error: "Invalid order response." };
+  }
+  return { error: "Invalid order response." };
+}
+
 export default function ConfirmPaymentPage() {
   const navigate = useNavigate();
-  const baseUrl = window._CONFIG_.VITE_API_BASE_URL;
 
   // Static demo data (replace with API later)
   const course = useMemo(
@@ -90,7 +106,12 @@ export default function ConfirmPaymentPage() {
     try {
       const res = await api.post("/payment/createOrder", paymentInfoPayload);
       if (res.status === 200) {
-        openRazorpayCheckout(res.data);
+        const { order, error } = parseCreateOrderPayload(res.data);
+        if (error) {
+          showErrorToast(error);
+          return;
+        }
+        openRazorpayCheckout(order);
       }
     } catch (err) {
       console.error("Order creation failed:", err);
@@ -104,7 +125,7 @@ export default function ConfirmPaymentPage() {
       return;
     }
 
-    const key = config?.razorpayKey;
+    const key = typeof config?.razorpayKey === "string" ? config.razorpayKey.trim() : "";
     if (!key) {
       showErrorToast("Razorpay key missing in config.");
       return;
@@ -119,17 +140,22 @@ export default function ConfirmPaymentPage() {
       image: "/logo.png",
       order_id: order?.id,
       handler: function (response) {
-        axios
-          .post(`${baseUrl}/payment/verifyPayment`, {
-            orderId: response.razorpay_order_id,
-            paymentId: response.razorpay_payment_id,
-            signature: response.razorpay_signature,
+        api
+          .post("/payment/verifyPayment", {
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_signature: response.razorpay_signature,
           })
           .then(() => {
             showSuccessToast("Payment Success!");
             navigate("/account/invoices");
           })
-          .catch(() => {
+          .catch((err) => {
+            console.error(
+              "verifyPayment",
+              err.response?.status,
+              err.response?.data ?? err.message,
+            );
             showErrorToast("Payment Verification Failed");
           });
       },
@@ -203,7 +229,7 @@ export default function ConfirmPaymentPage() {
         </div>
 
         <div className="bg-white shadow-2xl rounded-3xl border border-gray-200 p-7 relative overflow-hidden">
-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-orange-400 opacity-20 rounded-full blur-3xl"></div>
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500 opacity-20 rounded-full blur-3xl"></div>
 
           <div className="flex gap-4 items-center pb-5 border-b">
             <div className="w-20 h-20 rounded-xl bg-slate-200 shadow-md flex items-center justify-center">
@@ -242,9 +268,9 @@ export default function ConfirmPaymentPage() {
               <span>-₹{discount}</span>
             </div>
 
-            <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl px-4 py-4 flex justify-between items-center">
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-4 flex justify-between items-center">
               <span className="text-gray-700 font-semibold">Amount</span>
-              <span className="text-2xl font-bold text-orange-600">₹{totals.amount}</span>
+              <span className="text-2xl font-bold text-blue-700">₹{totals.amount}</span>
             </div>
           </div>
 
@@ -256,7 +282,7 @@ export default function ConfirmPaymentPage() {
             type="button"
             onClick={() => createOrder(totals.amount, course.id)}
             disabled={totals.amount <= 0}
-            className="w-full mt-6 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-3.5 rounded-xl font-semibold shadow-lg transition-all duration-300 disabled:opacity-50"
+            className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3.5 rounded-xl font-semibold shadow-lg transition-all duration-300 disabled:opacity-50"
           >
             Pay ₹{totals.amount}
           </button>

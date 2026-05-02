@@ -1,10 +1,13 @@
 package com.RankwellClient.entity;
 
+import java.time.Instant;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 
 @Entity
 public class Users {
@@ -32,6 +35,16 @@ public class Users {
 	private String postalCode;
 	private String userImg;
 	private boolean frozen;
+
+	@Column(name = "created_at")
+	private Instant createdAt;
+
+	@PrePersist
+	protected void onCreate() {
+		if (createdAt == null) {
+			createdAt = Instant.now();
+		}
+	}
 	
 	 // One user can have many notes
 //    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true) 
@@ -170,6 +183,12 @@ public class Users {
 		super();
 		this.id = id;
 	}
-	
-	
+
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(Instant createdAt) {
+		this.createdAt = createdAt;
+	}
 }

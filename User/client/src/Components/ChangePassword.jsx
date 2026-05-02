@@ -112,7 +112,7 @@ function ChangePassword() {
             onChange={handlePassword}
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
-            className="p-3 border border-gray-300 focus:outline-none rounded-md focus:ring-2 focus:ring-orange-400 w-full"
+            className="p-3 border border-gray-300 focus:outline-none rounded-md focus:ring-2 focus:ring-blue-500 w-full"
             placeholder="OLD PASSWORD"
           />
           <button
@@ -131,7 +131,7 @@ function ChangePassword() {
             onChange={handlePassword}
             type={showPasswords ? "text" : "password"}
             autoComplete="new-password"
-            className="p-3 border border-gray-300 focus:outline-none rounded-md focus:ring-2 focus:ring-orange-400 w-full"
+            className="p-3 border border-gray-300 focus:outline-none rounded-md focus:ring-2 focus:ring-blue-500 w-full"
             placeholder="NEW PASSWORD"
           />
           <button
@@ -149,7 +149,7 @@ function ChangePassword() {
           onChange={(e) => setConfirmPassword(e.target.value)}
           type="password"
           autoComplete="new-password"
-          className="p-3 border border-gray-300 focus:outline-none rounded-md focus:ring-2 focus:ring-orange-400 w-full"
+          className="p-3 border border-gray-300 focus:outline-none rounded-md focus:ring-2 focus:ring-blue-500 w-full"
           placeholder="CONFIRM PASSWORD"
         />
         <button type="submit" className="bg-black text-white rounded-full w-40 px-8 py-2">
