@@ -73,6 +73,9 @@ public interface OrganizationService {
                   void addGalleryImage(Long orgId, MultipartFile image) throws IOException;
                   void deleteGalleryImage(Long orgId, String imagePath);
 
+                  void addTeamImage(Long orgId, MultipartFile image) throws IOException;
+                  void deleteTeamImage(Long orgId, String imagePath);
+
                   // ===== ACHIEVEMENT OPERATIONS =====
                   void addAchievementImage(Long orgId, MultipartFile image) throws IOException;
                   void deleteAchievementImage(Long orgId, String imagePath);

@@ -3,6 +3,8 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import menus from "../menu.js";
 import axios from "axios";
 import { decodeToken } from "../authConfig";
+import { orgMediaUrl } from "../utils/orgMediaUrl";
+import EdukifyLogo from "../Components/EdukifyLogo.jsx";
 import "animate.css";
 
 export default function Navbar() {
@@ -15,20 +17,15 @@ export default function Navbar() {
   const [userData, setUserData] = useState({});
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [orgLogo, setOrgLogo] = useState("");
+  const [orgName, setOrgName] = useState("");
+  /** When false, show a neutral placeholder — avoids Edukify flashing before org API returns a custom logo. */
+  const [orgBrandingReady, setOrgBrandingReady] = useState(false);
 
   const desktopAccountRef = useRef(null);
   const mobileAccountRef = useRef(null);
 
   const baseUrl = window._CONFIG_.VITE_API_BASE_URL;
   const adminApiBaseUrl = window._CONFIG_.VITE_ADMIN_PROJECT_URL;
-
-  const getImageUrl = (path, base) => {
-    if (!path) return "";
-    const cleanedBase = String(base || "").replace(/\/$/, "");
-    const cleanedPath = String(path).replace(/^\/+/, "");
-    if (!cleanedBase) return `/${cleanedPath}`;
-    return `${cleanedBase}/${cleanedPath}`;
-  };
 
   const refreshAuth = () => {
     const id = decodeToken();
@@ -65,14 +62,24 @@ export default function Navbar() {
     const fetchOrganisation = async () => {
       const token = localStorage.getItem("authToken");
       const apiBase = adminApiBaseUrl || baseUrl;
-      if (!apiBase) return;
+      setOrgBrandingReady(false);
+      if (!apiBase) {
+        setOrgLogo("");
+        setOrgName("");
+        setOrgBrandingReady(true);
+        return;
+      }
       try {
         const res = await axios.get(`${apiBase}/organizations/details`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         setOrgLogo(res.data?.orgLogo ?? "");
+        setOrgName(res.data?.orgName ?? "");
       } catch {
         setOrgLogo("");
+        setOrgName("");
+      } finally {
+        setOrgBrandingReady(true);
       }
     };
     fetchOrganisation();
@@ -164,7 +171,9 @@ export default function Navbar() {
     </div>
   );
 
-  const brandLogoSrc = orgLogo ? getImageUrl(orgLogo, adminApiBaseUrl || baseUrl) : "Logo";
+  const assetBase = adminApiBaseUrl || baseUrl;
+  const brandLogoSrc = orgLogo ? orgMediaUrl(orgLogo, assetBase) : null;
+  const brandLabel = typeof orgName === "string" && orgName.trim() ? orgName.trim() : "Edukify";
 
   const navLinkClass =
     "rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-sky-50 hover:text-sky-700";
@@ -173,13 +182,22 @@ export default function Navbar() {
     <>
       {/* Desktop: compact light bar — distinct from full-width dark tenant headers */}
       <header className="sticky top-0 z-50 hidden w-full border-b border-sky-100 bg-white/90 shadow-sm backdrop-blur-md md:block">
-        <div className="mx-auto flex h-[56px] max-w-6xl items-center justify-between gap-6 px-5 lg:px-8">
-          <Link to="/" className="flex shrink-0 items-center py-1">
-            <img
-              src={brandLogoSrc}
-              alt="Home"
-              className="h-10 w-auto max-w-[130px] object-contain lg:h-11 lg:max-w-[150px]"
-            />
+        <div className="mx-auto flex min-h-[76px] max-w-6xl items-center justify-between gap-6 px-5 py-2.5 lg:min-h-[80px] lg:px-8 lg:py-3">
+          <Link to="/" className="flex min-w-0 shrink-0 items-center py-0.5" aria-label="Home">
+            {!orgBrandingReady ? (
+              <span
+                className="inline-block h-11 w-[200px] max-w-[55vw] animate-pulse rounded-xl bg-slate-200/90 lg:h-[52px]"
+                aria-hidden
+              />
+            ) : brandLogoSrc ? (
+              <img
+                src={brandLogoSrc}
+                alt={brandLabel}
+                className="h-11 w-auto max-w-[160px] object-contain lg:h-[52px] lg:max-w-[180px]"
+              />
+            ) : (
+              <EdukifyLogo />
+            )}
           </Link>
 
           <nav className="hidden flex-1 justify-center gap-1 md:flex lg:gap-2">
@@ -227,7 +245,7 @@ export default function Navbar() {
 
       {/* Mobile: slimmer single row */}
       <div className="sticky top-0 z-40 border-b border-sky-100 bg-white/95 shadow-sm backdrop-blur-md md:hidden">
-        <div className="flex h-[52px] items-center justify-between gap-2 px-3">
+        <div className="flex min-h-[64px] items-center justify-between gap-2 px-3 py-2">
           <button
             type="button"
             onClick={() => setMenuDropDown(!menuDropDown)}
@@ -239,8 +257,22 @@ export default function Navbar() {
             to="/"
             className="flex min-w-0 flex-1 justify-center"
             onClick={() => setMenuDropDown(false)}
+            aria-label="Home"
           >
-            <img src={brandLogoSrc} alt="Home" className="h-9 max-h-9 w-auto object-contain" />
+            {!orgBrandingReady ? (
+              <span
+                className="inline-block h-10 w-[160px] max-w-[42vw] animate-pulse rounded-lg bg-slate-200/90 sm:h-11"
+                aria-hidden
+              />
+            ) : brandLogoSrc ? (
+              <img
+                src={brandLogoSrc}
+                alt={brandLabel}
+                className="h-10 max-h-10 w-auto object-contain sm:h-11 sm:max-h-11"
+              />
+            ) : (
+              <EdukifyLogo compact />
+            )}
           </Link>
 
           <div className="flex shrink-0 items-center gap-2">

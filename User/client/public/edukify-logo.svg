@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 52" width="220" height="52" role="img" aria-label="Edukify">
+  <defs>
+    <linearGradient id="edukifyMarkGrad" x1="6" y1="4" x2="36" y2="38" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0284c7"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="edukifyWordGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop stop-color="#0369a1"/>
+      <stop offset="0.55" stop-color="#0284c7"/>
+      <stop offset="1" stop-color="#0891b2"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="6" width="40" height="40" rx="11" fill="url(#edukifyMarkGrad)"/>
+  <path
+    d="M14.5 18.5h12M14.5 26h8.5M14.5 33.5h12M14.5 18.5v15"
+    stroke="#ffffff"
+    stroke-width="2.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+    opacity="0.96"
+  />
+  <text
+    x="52"
+    y="36"
+    fill="url(#edukifyWordGrad)"
+    font-family="Segoe UI, system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif"
+    font-size="27"
+    font-weight="700"
+    letter-spacing="-0.02em"
+  >Edukify</text>
+</svg>

@@ -8,12 +8,16 @@ import Home from "./pages/Home";
 import About from "./pages/About";
 import Career from "./pages/Career";
 import Gallery from "./pages/Gallery";
+import OurTeam from "./pages/OurTeam";
 import Contact from "./pages/Contact";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import MyAccount from "./pages/MyAccount";
 import ChatSupport from "./Components/ChatSupport";
 import ForgotPassword from "./pages/ForgotPassword";
+import SolutionHub from "./pages/SolutionHub";
+import SolutionInsightDetail from "./pages/SolutionInsightDetail";
+import PlatformOffering from "./pages/PlatformOffering";
 
 function MainLayout() {
   return (
@@ -35,9 +39,13 @@ export default function App() {
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/platform" element={<PlatformOffering />} />
+          <Route path="/solution" element={<SolutionHub />} />
+          <Route path="/solution/:slug" element={<SolutionInsightDetail />} />
           <Route path="/about" element={<About />} />
           <Route path="/career" element={<Career />} />
           <Route path="/gallery" element={<Gallery />} />
+          <Route path="/our-team" element={<OurTeam />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/account" element={<Navigate to="/account/account" replace />} />
           <Route path="/account/:component" element={<MyAccount />} />

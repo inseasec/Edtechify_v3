@@ -52,6 +52,10 @@ public class OrganizationDetail {
     @JsonManagedReference
     private  OrgGallery orgGallery;
 
+    @OneToOne(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @JsonManagedReference
+    private OrgTeamGallery orgTeamGallery;
+
 	@OneToOne(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JsonManagedReference
     private OrgHome orgHome; 
@@ -146,6 +150,14 @@ public class OrganizationDetail {
 
 	public void setOrgGallery(OrgGallery orgGallery) {
 		this.orgGallery = orgGallery;
+	}
+
+	public OrgTeamGallery getOrgTeamGallery() {
+		return orgTeamGallery;
+	}
+
+	public void setOrgTeamGallery(OrgTeamGallery orgTeamGallery) {
+		this.orgTeamGallery = orgTeamGallery;
 	}
 
 	public OrganizationDetail() {

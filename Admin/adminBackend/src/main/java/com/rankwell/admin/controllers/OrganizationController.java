@@ -305,6 +305,24 @@ public class OrganizationController {
            return ResponseEntity.ok("Gallery image deleted successfully");
 		}
 
+	@PostMapping(value = "/team/add", consumes = {"multipart/form-data"})
+	public ResponseEntity<String> addTeamImage(@RequestPart("image") MultipartFile image) throws IOException {
+		OrganizationDetail org = organizationRepository
+				.findFirstByOrderByIdAsc()
+				.orElseThrow(() -> new RuntimeException("Organization not found"));
+		organizationService.addTeamImage(org.getId(), image);
+		return ResponseEntity.ok("Team image added successfully");
+	}
+
+	@DeleteMapping("/team")
+	public ResponseEntity<String> deleteTeamImage(@RequestParam("imagePath") String imagePath) {
+		OrganizationDetail org = organizationRepository
+				.findFirstByOrderByIdAsc()
+				.orElseThrow(() -> new RuntimeException("Organization not found"));
+		organizationService.deleteTeamImage(org.getId(), imagePath);
+		return ResponseEntity.ok("Team image deleted successfully");
+	}
+
 
 	@PostMapping(value = "/achievement/add", consumes = {"multipart/form-data"})
 	public ResponseEntity<String> addAchievementImage(@RequestPart("image") MultipartFile image) throws IOException {

@@ -2,6 +2,7 @@ package com.rankwell.admin.dto;
 
 import com.rankwell.admin.entity.OrgGallery;
 import com.rankwell.admin.entity.OrgHome;
+import com.rankwell.admin.entity.OrgTeamGallery;
 import java.util.Map;
 
 public class OrganizationDetailDto {
@@ -20,6 +21,7 @@ public class OrganizationDetailDto {
 	private OrgDirectorDetailDTO orgDirectorDetail;
 	private OrgAchievementDTO orgAchievement; 
 	private OrgGallery orgGallery;
+	private OrgTeamGallery orgTeamGallery;
 	private OrgHome orgHome;
 
 
@@ -111,6 +113,15 @@ public class OrganizationDetailDto {
 	public void setOrgGallery(OrgGallery orgGallery) {
 		this.orgGallery = orgGallery;
 	}
+
+	public OrgTeamGallery getOrgTeamGallery() {
+		return orgTeamGallery;
+	}
+
+	public void setOrgTeamGallery(OrgTeamGallery orgTeamGallery) {
+		this.orgTeamGallery = orgTeamGallery;
+	}
+
 	public OrganizationDetailDto() {
 		super();
 		// TODO Auto-generated constructor stub

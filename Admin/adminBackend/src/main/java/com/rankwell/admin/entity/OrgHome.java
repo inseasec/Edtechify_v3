@@ -2,6 +2,7 @@ package com.rankwell.admin.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Lob;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -41,8 +42,26 @@ public class OrgHome{
     @OneToMany(mappedBy = "home", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonManagedReference
     private List<HomeImage> images;
-    private String bannerVideo; 
-    
+    private String bannerVideo;
+
+    /** Public marketing site — hero headline over banner / gradient (CRM-editable). */
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String homeHeroTitle;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String homeHeroSubtitle;
+
+    /** Single line or short HTML-free text under hero (trust strip). */
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String homeTrustStrip;
+
+    /** Intro paragraph above the offerings grid. */
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String homeOfferingsIntro;
 
    @OneToOne
 	 @JoinColumn(name = "organization_id", nullable = false) 
@@ -194,6 +213,38 @@ public class OrgHome{
 
      public void setBannerVideo(String bannerVideo) {
          this.bannerVideo = bannerVideo;
+    }
+
+    public String getHomeHeroTitle() {
+        return homeHeroTitle;
+    }
+
+    public void setHomeHeroTitle(String homeHeroTitle) {
+        this.homeHeroTitle = homeHeroTitle;
+    }
+
+    public String getHomeHeroSubtitle() {
+        return homeHeroSubtitle;
+    }
+
+    public void setHomeHeroSubtitle(String homeHeroSubtitle) {
+        this.homeHeroSubtitle = homeHeroSubtitle;
+    }
+
+    public String getHomeTrustStrip() {
+        return homeTrustStrip;
+    }
+
+    public void setHomeTrustStrip(String homeTrustStrip) {
+        this.homeTrustStrip = homeTrustStrip;
+    }
+
+    public String getHomeOfferingsIntro() {
+        return homeOfferingsIntro;
+    }
+
+    public void setHomeOfferingsIntro(String homeOfferingsIntro) {
+        this.homeOfferingsIntro = homeOfferingsIntro;
     }
 
     public Long getId() {

@@ -17,6 +17,7 @@ import com.rankwell.admin.entity.OrgAboutUs;
 import com.rankwell.admin.entity.OrgAchievement;
 import com.rankwell.admin.entity.OrgDirectorDetail;
 import com.rankwell.admin.entity.OrgGallery;
+import com.rankwell.admin.entity.OrgTeamGallery;
 import com.rankwell.admin.entity.OrganizationDetail;
 import com.rankwell.admin.repository.OrganizationRepository;
 import com.rankwell.admin.services.FileStorageService;
@@ -167,6 +168,19 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
            home.setBannerVideo(newBanner);
         }
 
+        if (dto.getOrgHome().getHomeHeroTitle() != null) {
+            home.setHomeHeroTitle(dto.getOrgHome().getHomeHeroTitle());
+        }
+        if (dto.getOrgHome().getHomeHeroSubtitle() != null) {
+            home.setHomeHeroSubtitle(dto.getOrgHome().getHomeHeroSubtitle());
+        }
+        if (dto.getOrgHome().getHomeTrustStrip() != null) {
+            home.setHomeTrustStrip(dto.getOrgHome().getHomeTrustStrip());
+        }
+        if (dto.getOrgHome().getHomeOfferingsIntro() != null) {
+            home.setHomeOfferingsIntro(dto.getOrgHome().getHomeOfferingsIntro());
+        }
+
          home.setOrganization(org);
          org.setOrgHome(home);
 
@@ -310,6 +324,19 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
     String newBanner = saveFile( bannerVideo, Module.HOME_PAGE, mediaType, prefix, 1);
         home.setBannerVideo(newBanner);
     }
+
+        if (dto.getOrgHome().getHomeHeroTitle() != null) {
+            home.setHomeHeroTitle(dto.getOrgHome().getHomeHeroTitle());
+        }
+        if (dto.getOrgHome().getHomeHeroSubtitle() != null) {
+            home.setHomeHeroSubtitle(dto.getOrgHome().getHomeHeroSubtitle());
+        }
+        if (dto.getOrgHome().getHomeTrustStrip() != null) {
+            home.setHomeTrustStrip(dto.getOrgHome().getHomeTrustStrip());
+        }
+        if (dto.getOrgHome().getHomeOfferingsIntro() != null) {
+            home.setHomeOfferingsIntro(dto.getOrgHome().getHomeOfferingsIntro());
+        }
    
      // ========== COURSES UPDATE =========//
 
@@ -535,6 +562,63 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
             gallery.getGalleryImages().remove(imagePath);
             organizationRepository.save(org);
         }
+
+	@Override
+	public void addTeamImage(Long orgId, MultipartFile image) throws IOException {
+
+		OrganizationDetail org = organizationRepository.findById(orgId)
+				.orElseThrow(() -> new RuntimeException("Organization not found"));
+
+		OrgTeamGallery teamGallery = org.getOrgTeamGallery();
+
+		if (teamGallery == null) {
+			teamGallery = new OrgTeamGallery();
+			teamGallery.setOrganization(org);
+			teamGallery.setTeamImages(new ArrayList<>());
+			org.setOrgTeamGallery(teamGallery);
+		}
+
+		if (teamGallery.getTeamImages() == null) {
+			teamGallery.setTeamImages(new ArrayList<>());
+		}
+		int nextSerial = 1;
+
+		if (teamGallery.getTeamImages() != null && !teamGallery.getTeamImages().isEmpty()) {
+			nextSerial = teamGallery.getTeamImages().stream()
+					.map(path -> {
+						try {
+							String fileName = new File(path).getName();
+							String number = fileName.replaceAll("[^0-9]", "");
+							return Integer.parseInt(number);
+						} catch (Exception e) {
+							return 0;
+						}
+					})
+					.max(Integer::compareTo)
+					.orElse(0) + 1;
+		}
+
+		String path = saveFile(image, Module.TEAM, MediaType.IMAGE, "Team_Image", nextSerial);
+		teamGallery.getTeamImages().add(path);
+		organizationRepository.save(org);
+	}
+
+	@Override
+	public void deleteTeamImage(Long orgId, String imagePath) {
+
+		OrganizationDetail org = organizationRepository.findById(orgId)
+				.orElseThrow(() -> new RuntimeException("Organization not found"));
+
+		OrgTeamGallery teamGallery = org.getOrgTeamGallery();
+
+		if (teamGallery == null || teamGallery.getTeamImages() == null) {
+			return;
+		}
+
+		deleteFile(imagePath);
+		teamGallery.getTeamImages().remove(imagePath);
+		organizationRepository.save(org);
+	}
 
  public void addAchievementImage(Long orgId, MultipartFile image) throws IOException{
 

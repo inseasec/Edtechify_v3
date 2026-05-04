@@ -15,6 +15,8 @@ import AboutTemplates from '@/Components/AboutTemplates'
 const ORG_UPDATE_PATH = '/organizations/update'
 const ACHIEVEMENT_ADD_PATH = '/organizations/achievement/add'
 const ACHIEVEMENT_DELETE_PATH = '/organizations/achievement'
+const TEAM_ADD_PATH = '/organizations/team/add'
+const TEAM_DELETE_PATH = '/organizations/team'
 
 const baseUrl = window._CONFIG_.VITE_API_BASE_URL;
 // const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? ''
@@ -24,6 +26,16 @@ function courseImageUrl(filename) {
   const path = filename.replace(/^\//, '')
   if (path.includes('course-images')) return `${baseUrl}/${path}`
   return `${baseUrl}/course-images/${path}`
+}
+
+/** Stored paths are usually `OrgData/...`; match public site `orgMediaUrl` behaviour. */
+function orgAssetUrl(filename, apiBase) {
+  const b = String(apiBase ?? baseUrl ?? '').replace(/\/$/, '')
+  if (!filename || typeof filename !== 'string') return ''
+  const path = filename.replace(/^\/+/, '')
+  if (path.startsWith('OrgData/')) return `${b}/${path}`
+  if (path.includes('course-images')) return `${b}/${path}`
+  return `${b}/course-images/${path}`
 }
 
 function multipartConfig() {
@@ -59,6 +71,7 @@ export default function UserPanelAbout() {
 
   const fileInputRef = useRef(null)
   const achRef = useRef(null)
+  const teamFileInputRef = useRef(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -87,6 +100,7 @@ export default function UserPanelAbout() {
   const [directorImageFile, setDirectorImageFile] = useState(null)
 
   const [existingAchievementImages, setExistingAchievementImages] = useState([])
+  const [existingTeamImages, setExistingTeamImages] = useState([])
   const [selectedImage, setSelectedImage] = useState(null)
   const [achievementPreviewUrl, setAchievementPreviewUrl] = useState(null)
 
@@ -104,6 +118,11 @@ export default function UserPanelAbout() {
   const ctxAchievementImages = Array.isArray(formData?.orgAchievement?.achivementImages)
     ? formData.orgAchievement.achivementImages
     : []
+
+  const ctxTeamImages = Array.isArray(formData?.orgTeamGallery?.teamImages)
+    ? formData.orgTeamGallery.teamImages
+    : []
+  const displayTeamImages = ctxMode ? ctxTeamImages : existingTeamImages
 
   const aboutWallpaperPath = formData?.orgAboutUs?.aboutWallpaper ?? null
   const directorImagePath = formData?.orgDirectorDetail?.directorImage ?? null
@@ -182,6 +201,10 @@ export default function UserPanelAbout() {
         data.achievementImages ??
         []
       setExistingAchievementImages(Array.isArray(achImgs) ? [...achImgs] : [])
+
+      const oteam = data.orgTeamGallery ?? {}
+      const tImgs = oteam.teamImages ?? []
+      setExistingTeamImages(Array.isArray(tImgs) ? [...tImgs] : [])
     } catch (err) {
       console.error(err)
       showErrorToast(err?.response?.data?.message ?? err?.response?.data ?? 'Could not load organization')
@@ -331,6 +354,47 @@ export default function UserPanelAbout() {
     } catch (error) {
       console.error(error)
       showErrorToast(error?.response?.data?.message ?? 'Upload failed')
+    }
+  }
+
+  const uploadTeamImage = async (file) => {
+    if (!file || !file.type.startsWith('image/')) return
+    const fd = new FormData()
+    fd.append('image', file)
+    try {
+      await api.post(TEAM_ADD_PATH, fd, multipartConfig())
+      showSuccessToast('Team photo added')
+      if (ctxMode) {
+        await ctxFetchAllData?.()
+      } else {
+        await loadDetails()
+      }
+    } catch (error) {
+      console.error(error)
+      showErrorToast(error?.response?.data?.message ?? 'Upload failed')
+    }
+  }
+
+  const handleTeamFileChange = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) uploadTeamImage(file)
+  }
+
+  const removeTeamImage = async (imagePath) => {
+    if (!imagePath) return
+    if (!window.confirm('Remove this team photo (About page and public /our-team)?')) return
+    try {
+      await api.delete(TEAM_DELETE_PATH, { params: { imagePath } })
+      showSuccessToast('Photo removed')
+      if (ctxMode) {
+        await ctxFetchAllData?.()
+      } else {
+        await loadDetails()
+      }
+    } catch (error) {
+      console.error(error)
+      showErrorToast(error?.response?.data?.message ?? 'Could not remove photo')
     }
   }
 
@@ -689,6 +753,57 @@ export default function UserPanelAbout() {
                 className="w-full rounded-2xl border-2 border-gray-300 p-4 outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
+          </div>
+
+          <div className="mx-auto max-w-5xl px-4 py-10">
+            <input
+              ref={teamFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleTeamFileChange}
+            />
+            <h2 className="text-center text-2xl font-bold text-gray-900 sm:text-3xl">Team photos</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-gray-600">
+              Shown on the public <strong className="font-semibold text-gray-800">About us</strong> page and{" "}
+              <strong className="font-semibold text-gray-800">Our Team</strong> (<code className="text-xs">/our-team</code>
+              ). Product images are managed separately under User Panel → Home → Product gallery.
+            </p>
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => teamFileInputRef.current?.click()}
+                className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700"
+              >
+                <ImagePlus className="h-5 w-5" aria-hidden />
+                Add team photo
+              </button>
+            </div>
+            {displayTeamImages.length > 0 ? (
+              <ul className="mt-8 grid list-none grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4 lg:grid-cols-4">
+                {displayTeamImages.map((imgPath, i) => (
+                  <li key={`${imgPath}-${i}`} className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 shadow-sm">
+                    <img
+                      src={orgAssetUrl(imgPath, effectiveBaseUrl)}
+                      alt=""
+                      className="aspect-[4/3] w-full object-cover"
+                      loading="lazy"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeTeamImage(imgPath)}
+                      className="absolute right-2 top-2 rounded-full bg-white/95 p-1.5 text-red-600 shadow-md ring-1 ring-red-100 transition hover:bg-red-50"
+                      title="Remove photo"
+                      aria-label="Remove photo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-8 text-center text-sm text-gray-500">No team photos yet—add one above.</p>
+            )}
           </div>
 
           <hr className="my-2 mt-12 h-1 w-full rounded-full bg-black" />

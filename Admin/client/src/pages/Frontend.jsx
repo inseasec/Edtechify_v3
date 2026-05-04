@@ -62,6 +62,10 @@ function defaultForm() {
       completeHeading: null,
       trendingCourseHeading: null,
       termsAndConditions: null,
+      homeHeroTitle: '',
+      homeHeroSubtitle: '',
+      homeTrustStrip: '',
+      homeOfferingsIntro: '',
     },
     orgAboutUs: {
       aboutWallpaper: null,
@@ -82,6 +86,10 @@ function defaultForm() {
     orgGallery: {
       galleryTitle: '',
       galleryImages: [],
+    },
+    orgTeamGallery: {
+      teamSectionTitle: '',
+      teamImages: [],
     },
   }
 }
@@ -124,6 +132,12 @@ function mapDetailsToForm(raw) {
     next.orgGallery = {
       galleryTitle: d.orgGallery.galleryTitle ?? '',
       galleryImages: [...(d.orgGallery.galleryImages ?? [])],
+    }
+  }
+  if (d.orgTeamGallery) {
+    next.orgTeamGallery = {
+      teamSectionTitle: d.orgTeamGallery.teamSectionTitle ?? '',
+      teamImages: [...(d.orgTeamGallery.teamImages ?? [])],
     }
   }
   return next

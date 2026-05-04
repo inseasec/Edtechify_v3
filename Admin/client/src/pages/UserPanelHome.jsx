@@ -12,6 +12,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  FileText,
   Upload,
   User,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ export default function UserPanelHome() {
     formData = {},
     handleTextChange,
     handleFileChange,
+    handleGalleryFiles,
     files = {},
     isLoading,
     baseUrl = '',
@@ -251,6 +253,129 @@ export default function UserPanelHome() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* ===== PUBLIC SITE COPY (saved with organization) ===== */}
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-8 md:px-8">
+            <div className="mx-auto max-w-4xl">
+              <div className="mb-4 flex items-center gap-2 text-slate-800">
+                <FileText className="h-5 w-5 shrink-0 text-sky-600" />
+                <h2 className="text-lg font-semibold">Homepage text (live marketing site)</h2>
+              </div>
+              <p className="mb-6 text-sm text-slate-600">
+                These fields power the public <strong>Home</strong> hero and bands.                 Use an <strong>institutional, precise tone</strong> (institutes and training
+                organizations—not generic “startup” hype). Hero title can use line breaks for
+                emphasis. Leave blank for Edukify defaults. Save with <strong>Update</strong> (same
+                as logo and banner).
+              </p>
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Hero title
+                  </span>
+                  <textarea
+                    name="orgHome.homeHeroTitle"
+                    rows={3}
+                    value={formData.orgHome?.homeHeroTitle ?? ''}
+                    onChange={handleTextChange}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    placeholder={'e.g. Hey institutes — still not on the web?\nHave your own EdTech platform launched through us.'}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Hero subtitle
+                  </span>
+                  <textarea
+                    name="orgHome.homeHeroSubtitle"
+                    rows={3}
+                    value={formData.orgHome?.homeHeroSubtitle ?? ''}
+                    onChange={handleTextChange}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    placeholder="Plain words: why they are offline, what blocks them (skills, cost, time), and that you remove that wall—no jargon."
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Trust strip (one line)
+                  </span>
+                  <input
+                    type="text"
+                    name="orgHome.homeTrustStrip"
+                    value={formData.orgHome?.homeTrustStrip ?? ''}
+                    onChange={handleTextChange}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    placeholder="e.g. Built for training companies · Hosting included"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Offerings section intro
+                  </span>
+                  <textarea
+                    name="orgHome.homeOfferingsIntro"
+                    rows={3}
+                    value={formData.orgHome?.homeOfferingsIntro ?? ''}
+                    onChange={handleTextChange}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    placeholder="Optional intro above capability cards; replaces default paragraph if set."
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* ===== PUBLIC GALLERY PAGE (title + images) ===== */}
+          <div className="border-b border-slate-200 bg-white px-4 py-8 md:px-8">
+            <div className="mx-auto max-w-4xl">
+              <div className="mb-2 flex items-center gap-2 text-slate-800">
+                <Image className="h-5 w-5 shrink-0 text-sky-600" />
+                <h2 className="text-lg font-semibold">Product gallery (public site)</h2>
+              </div>
+              <p className="mb-4 text-sm text-slate-600">
+                Heading and <strong className="font-semibold text-slate-800">product</strong> images for{" "}
+                <strong>/gallery</strong>. Choosing new images here and clicking <strong>Update</strong>{" "}
+                replaces the previous set on the server. Team photos are managed under User Panel →
+                About → Team photos (<strong>/our-team</strong>).
+              </p>
+              <label className="block max-w-xl">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Product gallery page title
+                </span>
+                <input
+                  type="text"
+                  name="orgGallery.galleryTitle"
+                  value={formData.orgGallery?.galleryTitle ?? ''}
+                  onChange={handleTextChange}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                  placeholder="e.g. Product gallery"
+                />
+              </label>
+              <div className="mt-4">
+                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Replace product gallery images
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="block w-full max-w-xl text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-sky-700"
+                  onChange={(e) => {
+                    handleGalleryFiles?.(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+                {Array.isArray(formData.orgGallery?.galleryImages) &&
+                formData.orgGallery.galleryImages.length > 0 ? (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Currently {formData.orgGallery.galleryImages.length} image(s) on file. Select
+                    new files only when you want to replace them all.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">No images saved yet.</p>
+                )}
+              </div>
             </div>
           </div>
 

@@ -5,8 +5,12 @@ const menus = [{
 
 },
 {
-    mName: "About Us",
-    mLink: "/about"
+    mName: "Platform",
+    mLink: "/platform"
+},
+{
+    mName: "Solution",
+    mLink: "/solution"
 },
 // {
 //     mName: "All Courses ",
@@ -23,8 +27,16 @@ const menus = [{
 },
 
 {
-    mName: "Gallery",
+    mName: "Product gallery",
     mLink: "/gallery"
+},
+{
+    mName: "About Us",
+    mLink: "/about"
+},
+{
+    mName: "Our Team",
+    mLink: "/our-team"
 },
 {
     mName: "Contact Us",

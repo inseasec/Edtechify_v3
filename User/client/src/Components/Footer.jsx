@@ -3,14 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import menus from "../menu";
-
-function getImageUrl(path, baseUrl) {
-  if (!path) return "";
-  const base = String(baseUrl || "").replace(/\/$/, "");
-  const p = String(path).replace(/^\/+/, "");
-  if (!base) return `/${p}`;
-  return `${base}/${p}`;
-}
+import { orgMediaUrl } from "../utils/orgMediaUrl";
 
 export default function Footer() {
   const userApiBaseUrl = window._CONFIG_.VITE_API_BASE_URL;
@@ -45,7 +38,7 @@ export default function Footer() {
           <Link to="/" aria-label="Home">
             {organisation.orgLogo ? (
               <img
-                src={getImageUrl(organisation.orgLogo, adminApiBaseUrl || userApiBaseUrl)}
+                src={orgMediaUrl(organisation.orgLogo, adminApiBaseUrl || userApiBaseUrl)}
                 alt="Organization logo"
                 className="max-h-38 w-auto object-contain"
               />
