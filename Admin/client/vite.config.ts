@@ -12,6 +12,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Public marketing home (shared preview in User Panel → Home)
+      '@user-site': path.resolve(__dirname, '../../User/client/src'),
     },
   },
   server:{

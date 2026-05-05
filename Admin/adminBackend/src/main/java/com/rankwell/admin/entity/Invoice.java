@@ -30,6 +30,38 @@ public class Invoice {
 	private String billingAddress;
 	private Long invoiceDiscount;
 	private Long invoiceTaxRate;
+
+	// Snapshot of what was purchased (subscription plan) at invoice generation time.
+	@Column(name = "item_kind", length = 32)
+	private String itemKind;
+
+	@Column(name = "item_name", length = 255)
+	private String itemName;
+
+	@Column(name = "item_currency", length = 8)
+	private String itemCurrency;
+
+	@Column(name = "item_duration_days")
+	private Integer itemDurationDays;
+
+	@Column(name = "item_storage_limit_mb")
+	private Integer itemStorageLimitMb;
+
+	@Column(name = "item_unit_price")
+	private Long itemUnitPrice;
+
+	// Snapshot of invoicing profile (seller details) at generation time.
+	@Column(name = "seller_company_name", length = 255)
+	private String sellerCompanyName;
+
+	@Column(name = "seller_company_address", length = 2000)
+	private String sellerCompanyAddress;
+
+	@Column(name = "seller_company_logo_path", length = 2000)
+	private String sellerCompanyLogoPath;
+
+	@Column(name = "seller_company_gst_no", length = 64)
+	private String sellerCompanyGSTNo;
 	
 	@ManyToOne
 	@JoinColumn(name = "user_id")
@@ -128,6 +160,86 @@ public class Invoice {
 
 	public void setInvoiceTaxRate(Long invoiceTaxRate) {
 		this.invoiceTaxRate = invoiceTaxRate;
+	}
+
+	public String getItemKind() {
+		return itemKind;
+	}
+
+	public void setItemKind(String itemKind) {
+		this.itemKind = itemKind;
+	}
+
+	public String getItemName() {
+		return itemName;
+	}
+
+	public void setItemName(String itemName) {
+		this.itemName = itemName;
+	}
+
+	public String getItemCurrency() {
+		return itemCurrency;
+	}
+
+	public void setItemCurrency(String itemCurrency) {
+		this.itemCurrency = itemCurrency;
+	}
+
+	public Integer getItemDurationDays() {
+		return itemDurationDays;
+	}
+
+	public void setItemDurationDays(Integer itemDurationDays) {
+		this.itemDurationDays = itemDurationDays;
+	}
+
+	public Integer getItemStorageLimitMb() {
+		return itemStorageLimitMb;
+	}
+
+	public void setItemStorageLimitMb(Integer itemStorageLimitMb) {
+		this.itemStorageLimitMb = itemStorageLimitMb;
+	}
+
+	public Long getItemUnitPrice() {
+		return itemUnitPrice;
+	}
+
+	public void setItemUnitPrice(Long itemUnitPrice) {
+		this.itemUnitPrice = itemUnitPrice;
+	}
+
+	public String getSellerCompanyName() {
+		return sellerCompanyName;
+	}
+
+	public void setSellerCompanyName(String sellerCompanyName) {
+		this.sellerCompanyName = sellerCompanyName;
+	}
+
+	public String getSellerCompanyAddress() {
+		return sellerCompanyAddress;
+	}
+
+	public void setSellerCompanyAddress(String sellerCompanyAddress) {
+		this.sellerCompanyAddress = sellerCompanyAddress;
+	}
+
+	public String getSellerCompanyLogoPath() {
+		return sellerCompanyLogoPath;
+	}
+
+	public void setSellerCompanyLogoPath(String sellerCompanyLogoPath) {
+		this.sellerCompanyLogoPath = sellerCompanyLogoPath;
+	}
+
+	public String getSellerCompanyGSTNo() {
+		return sellerCompanyGSTNo;
+	}
+
+	public void setSellerCompanyGSTNo(String sellerCompanyGSTNo) {
+		this.sellerCompanyGSTNo = sellerCompanyGSTNo;
 	}
 
 //	public List<Courses> getCourses() {

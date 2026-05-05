@@ -56,7 +56,7 @@ const PaymentAccount = () => {
 
     return (
         <div className='h-[100vh]' style={{ margin: 'auto', padding: '20px' }}>
-            <h1 className='text-center text-grey-800 bg-[whitesmoke] font-black shadow-md shadow-white text-xl p-4'>Razorpay Account Configuration</h1>
+            <h1 className='text-center text-grey-800 bg-[whitesmoke] font-black shadow-md shadow-white text-xl p-4'>Payment Gateway Settings</h1>
             <h2 className='text-orange-500 text-left font-bold flex p-[15px_2px]'>
                 <Info className="shrink-0" size={22} /> <span className='text-white ml-[20px] font-bold bg-orange-500 p-[3px_7px] rounded-md'>
                     Note: Enter your Razorpay API Key and API Secret Key to connect your Razorpay account with the application and enable online payments.</span></h2>

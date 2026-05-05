@@ -66,6 +66,8 @@ public class SecurityConfig {
 	        .csrf(csrf -> csrf.disable())
 	            .authorizeHttpRequests(auth -> auth
 					.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+					// Public catalog for upgrade page (names, prices, duration — same data shown pre-checkout)
+					.requestMatchers(HttpMethod.GET, "/subscription-plans/active").permitAll()
                     // Careers (applications + lookups) — public for candidates; tighten specific paths separately if needed
                     .requestMatchers("/careers/**").permitAll()
                     .requestMatchers("/Careers/**").permitAll()

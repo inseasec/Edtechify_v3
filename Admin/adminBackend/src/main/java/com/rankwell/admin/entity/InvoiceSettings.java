@@ -12,6 +12,12 @@ public class InvoiceSettings {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id; 
 	private String invoiceGST;
+
+	// Invoicing profile (can differ from website branding / organization details)
+	private String invoiceCompanyName;
+	private String invoiceCompanyAddress;
+	private String invoiceCompanyLogoPath;
+	private String invoiceCompanyGSTNo;
 	private String invoicePrefix;
 	private String invoiceYear;
 	private String invoiceSuffix; // Serial No.
@@ -34,6 +40,38 @@ public class InvoiceSettings {
 
 	public void setInvoiceGST(String invoiceGST) {
 		this.invoiceGST = invoiceGST;
+	}
+
+	public String getInvoiceCompanyName() {
+		return invoiceCompanyName;
+	}
+
+	public void setInvoiceCompanyName(String invoiceCompanyName) {
+		this.invoiceCompanyName = invoiceCompanyName;
+	}
+
+	public String getInvoiceCompanyAddress() {
+		return invoiceCompanyAddress;
+	}
+
+	public void setInvoiceCompanyAddress(String invoiceCompanyAddress) {
+		this.invoiceCompanyAddress = invoiceCompanyAddress;
+	}
+
+	public String getInvoiceCompanyLogoPath() {
+		return invoiceCompanyLogoPath;
+	}
+
+	public void setInvoiceCompanyLogoPath(String invoiceCompanyLogoPath) {
+		this.invoiceCompanyLogoPath = invoiceCompanyLogoPath;
+	}
+
+	public String getInvoiceCompanyGSTNo() {
+		return invoiceCompanyGSTNo;
+	}
+
+	public void setInvoiceCompanyGSTNo(String invoiceCompanyGSTNo) {
+		this.invoiceCompanyGSTNo = invoiceCompanyGSTNo;
 	}
 
 	public String getInvoicePrefix() {

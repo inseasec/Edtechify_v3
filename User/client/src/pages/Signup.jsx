@@ -304,6 +304,17 @@ function Signup() {
     return true;
   }, [identifierType, isIdentifierValid, signupMode]);
 
+  const identifierHelpText = useMemo(() => {
+    if (!identifierRaw) return "";
+    if (signupMode === "MOBILE" && identifierType === "email") {
+      return "This portal is configured for mobile sign-up. Please enter a 10-digit mobile number."
+    }
+    if (signupMode === "EMAIL" && identifierType === "mobile") {
+      return "This portal is configured for email sign-up. Please enter a valid email address."
+    }
+    return ""
+  }, [identifierRaw, identifierType, signupMode])
+
   useEffect(() => {
     // Reset availability when identifier changes.
     setAvailability({ checking: false, available: true, message: "" });
@@ -842,12 +853,22 @@ function Signup() {
                       value={userInfo.identifier}
                       onChange={handleChange}
                       type="text"
+                      inputMode={signupMode === "MOBILE" ? "tel" : "text"}
                       autoComplete="username"
-                      placeholder={signupMode === "NORMAL" || signupMode === "EMAIL" ? "you@company.com" : ""}
+                      placeholder={
+                        signupMode === "MOBILE"
+                          ? "9876543210"
+                          : signupMode === "NORMAL" || signupMode === "EMAIL"
+                            ? "you@company.com"
+                            : "you@company.com or 9876543210"
+                      }
                       disabled={sendOtpMutation.isPending || verifyOtpMutation.isPending || otpVerified}
                     />
                   </div>
                   {error.identifier && <p className="mt-2 text-sm text-red-600">{error.identifier}</p>}
+                  {!error.identifier && identifierHelpText && (
+                    <p className="mt-2 text-sm text-amber-700">{identifierHelpText}</p>
+                  )}
                   {otpVerified && (
                     <p className="mt-2 text-sm text-green-600">
                       {identifierType === "email" ? "Email verified" : "Mobile verified"}

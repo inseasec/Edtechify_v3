@@ -350,7 +350,7 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
     const isTrial =
       !subNormalized || subNormalized.toLowerCase() === "trial";
     const expiryDisplay =
-      isTrial && portal.trialExpiresOn ? formatTrialExpiryIso(portal.trialExpiresOn) : "—";
+      portal.trialExpiresOn ? formatTrialExpiryIso(portal.trialExpiresOn) : "—";
 
     const spaceLeft = formatSpaceLeftMb(allocatedMb, portal.storageUsedBytes);
 
@@ -393,7 +393,7 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
                     </span>
                     {isTrial ? (
                       <Link
-                        to="/account/buynow"
+                        to="/account/upgrade-plans"
                         className="inline-flex items-center gap-0.5 text-xs font-semibold text-sky-600 underline-offset-2 hover:text-sky-800 hover:underline"
                       >
                         <i className="ri-shopping-bag-3-line text-sm" aria-hidden />

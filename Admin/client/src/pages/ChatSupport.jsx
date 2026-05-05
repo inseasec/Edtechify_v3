@@ -98,7 +98,7 @@ export default function ChatSupport() {
     <div className="min-h-screen bg-gray-100 p-4 sm:p-6">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
-          <h3 className="text-2xl font-semibold text-gray-800">Chat Configuration</h3>
+          <h3 className="text-2xl font-semibold text-gray-800">Support Chat Settings</h3>
           <button
             type="button"
             onClick={handleSubmit}

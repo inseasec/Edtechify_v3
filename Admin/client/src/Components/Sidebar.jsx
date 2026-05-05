@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAdminBasePath } from '@/hooks/useAdminBasePath';
 import { getUserRole } from '@/utils/auth';
+import EdukifyAdminBrand from './EdukifyAdminBrand';
 
 const Icon = {
   Chevron: ({ className = 'h-3.5 w-3.5' }) => (
@@ -49,24 +50,25 @@ const Icon = {
 }
 
 const linkClasses = ({ isActive }) =>
-  `block rounded-md px-2.5 py-2 text-sm no-underline transition-colors ${
-    isActive ? 'bg-white/10 text-white font-medium' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+  `block rounded-lg px-2.5 py-2 text-sm no-underline transition-colors ${
+    isActive
+      ? 'bg-sky-500/15 font-medium text-white ring-1 ring-sky-400/35 shadow-inner shadow-sky-900/20'
+      : 'text-slate-300 hover:bg-white/5 hover:text-white'
   }`;
 
 const subLinkClasses = ({ isActive }) =>
   `block rounded-md py-1.5 pl-2 pr-1.5 text-[13px] no-underline transition-colors ${
-    isActive ? 'bg-white/10 text-white font-medium' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+    isActive
+      ? 'bg-sky-500/15 font-medium text-white ring-1 ring-sky-400/25'
+      : 'text-slate-400 hover:bg-white/5 hover:text-white'
   }`;
 
 const Sidebar = () => {
   const base = useAdminBasePath();
   const location = useLocation();
   const role = getUserRole();
-  const [companyOpen, setCompanyOpen] = useState(() =>
+  const [settingsOpen, setSettingsOpen] = useState(() =>
     location.pathname.includes('/company-details'),
-  );
-  const [chatSupportOpen, setChatSupportOpen] = useState(() =>
-    /\/chat-support|\/configuration/.test(location.pathname),
   );
   const [userPanelOpen, setUserPanelOpen] = useState(() =>
     location.pathname.includes('/user-panel'),
@@ -84,13 +86,7 @@ const Sidebar = () => {
 
   useEffect(() => {
     if (location.pathname.includes('/company-details')) {
-      setCompanyOpen(true);
-    }
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (/\/chat-support|\/configuration/.test(location.pathname)) {
-      setChatSupportOpen(true);
+      setSettingsOpen(true);
     }
   }, [location.pathname]);
 
@@ -113,16 +109,15 @@ const Sidebar = () => {
     }
   }, [location.pathname]);
 
-  const companyLinks = [
+  const settingsLinks = [
     // { to: `${base}/company-details/pages`, label: 'Pages Company Details' },
-    { to: `${base}/company-details/account-settings`, label: 'Account Settings' },
+    { to: `${base}/company-details/smtp-server-settings`, label: 'SMTP Server Settings' },
+    { to: `${base}/company-details/sms-service-settings`, label: 'SMS Service Settings' },
+    { to: `${base}/company-details/account-settings`, label: 'Payment Gateway Settings' },
     { to: `${base}/company-details/invoice-settings`, label: 'Invoice Settings' },
     { to: `${base}/company-details/all-invoices`, label: 'All Invoices' },
-  ];
-
-  const chatSupportLinks = [
-    // { to: `${base}/configuration`, label: 'Configuration' },
-    { to: `${base}/chat-support`, label: 'Chat config' },
+    { to: `${base}/company-details/subscription-plans`, label: 'Subscription Plans' },
+    { to: `${base}/company-details/support-chat-settings`, label: 'Support Chat Settings' },
   ];
 
   const userPanelLinks = [
@@ -150,39 +145,21 @@ const Sidebar = () => {
         ];
 
   const mainItems = [
-    { to: `${base}/dashboard`, label: 'Dashboard' },
     { to: `${base}/admin`, label: 'Admin' },
     { to: `${base}/clients`, label: 'Clients' },
   ];
 
   return (
-    <aside className="sticky top-0 flex h-screen w-[13rem] shrink-0 flex-col overflow-x-hidden border-r border-slate-700/50 bg-slate-900 text-white">
-      <div className="px-3 pt-2">
-        <h3 className="text-sm font-semibold tracking-tight">Rankwell</h3>
-        <p className="mt-1 text-xs text-slate-400">Admin</p>
+    <aside className="sticky top-0 flex h-screen w-[15rem] shrink-0 flex-col overflow-x-hidden border-r border-sky-950/60 bg-gradient-to-b from-[#070d18] via-slate-900 to-slate-950 text-white shadow-xl shadow-slate-950/40">
+      <div className="px-3 pt-4 pb-1">
+        <EdukifyAdminBrand variant="sidebar" />
       </div>
-      <hr className="mx-3 my-3 border-slate-700" />
+      <div className="mx-3 my-3 h-px bg-gradient-to-r from-transparent via-sky-500/35 to-transparent" aria-hidden />
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 pb-6">
         {role !== 'HR' && (
-        <details
-          className="group rounded-md"
-          open={companyOpen}
-          onToggle={(e) => setCompanyOpen(e.currentTarget.open)}
-        >
-          <summary className="cursor-pointer list-none rounded-md px-2.5 py-2 text-sm font-medium text-gray-200 hover:bg-white/5 marker:hidden [&::-webkit-details-marker]:hidden flex items-center justify-between gap-2">
-            <span>Company Details</span>
-            <span className="text-slate-500 transition-transform group-open:rotate-180">
-              <Icon.Chevron />
-            </span>
-          </summary>
-          <div className="ml-1 mt-1 border-l border-slate-600/80 pl-1.5 space-y-0.5 pb-1">
-            {companyLinks.map(({ to, label }) => (
-              <NavLink key={to} to={to} className={subLinkClasses}>
-                {label}
-              </NavLink>
-            ))}
-          </div>
-        </details>
+          <NavLink to={`${base}/dashboard`} className={linkClasses} end>
+            Dashboard
+          </NavLink>
         )}
 
         {role !== 'HR' && (
@@ -286,31 +263,31 @@ const Sidebar = () => {
 
         {role !== 'HR' &&
           mainItems.map(({ to, label }) => (
-            <NavLink key={to} to={to} className={linkClasses} end={label === 'Dashboard'}>
+            <NavLink key={to} to={to} className={linkClasses}>
               {label}
             </NavLink>
           ))}
 
         {role !== 'HR' && (
-        <details
-          className="group rounded-md"
-          open={chatSupportOpen}
-          onToggle={(e) => setChatSupportOpen(e.currentTarget.open)}
-        >
-          <summary className="cursor-pointer list-none rounded-md px-2.5 py-2 text-sm font-medium text-gray-200 hover:bg-white/5 marker:hidden [&::-webkit-details-marker]:hidden flex items-center justify-between gap-2">
-            <span>Chat Support</span>
-            <span className="text-slate-500 transition-transform group-open:rotate-180">
-              <Icon.Chevron />
-            </span>
-          </summary>
-          <div className="ml-1 mt-1 border-l border-slate-600/80 pl-1.5 space-y-0.5 pb-1">
-            {chatSupportLinks.map(({ to, label }) => (
-              <NavLink key={to} to={to} className={subLinkClasses}>
-                {label}
-              </NavLink>
-            ))}
-          </div>
-        </details>
+          <details
+            className="group rounded-md"
+            open={settingsOpen}
+            onToggle={(e) => setSettingsOpen(e.currentTarget.open)}
+          >
+            <summary className="cursor-pointer list-none rounded-md px-2.5 py-2 text-sm font-medium text-gray-200 hover:bg-white/5 marker:hidden [&::-webkit-details-marker]:hidden flex items-center justify-between gap-2">
+              <span>Settings</span>
+              <span className="text-slate-500 transition-transform group-open:rotate-180">
+                <Icon.Chevron />
+              </span>
+            </summary>
+            <div className="ml-1 mt-1 border-l border-slate-600/80 pl-1.5 space-y-0.5 pb-1">
+              {settingsLinks.map(({ to, label }) => (
+                <NavLink key={to} to={to} className={subLinkClasses}>
+                  {label}
+                </NavLink>
+              ))}
+            </div>
+          </details>
         )}
       </nav>
     </aside>

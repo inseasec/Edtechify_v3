@@ -2,7 +2,7 @@ package com.RankwellClient.services;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Optional;
@@ -22,6 +22,8 @@ import com.RankwellClient.repository.EdukifyClientRepository;
 
 @Service
 public class EdukifyClientService {
+
+	private static final ZoneId TRIAL_ZONE = ZoneId.systemDefault();
 
 	private static final Set<String> RESERVED = Set.of(
 			"www", "admin", "api", "mail", "ftp", "app", "cdn", "static", "support",
@@ -138,16 +140,25 @@ public class EdukifyClientService {
 			int effectiveDays = (limitDays != null && limitDays > 0) ? limitDays : 14;
 			int effectiveMb = (limitMb != null && limitMb > 0) ? limitMb : 512;
 			r.setStorageAllocatedMb(effectiveMb);
-			Instant launched = c.getPortalLaunchedAt();
-			if (launched != null && effectiveDays >= 1) {
-				LocalDate anchor = launched.atZone(ZoneOffset.UTC).toLocalDate();
-				LocalDate endInclusive = anchor.plusDays((long) effectiveDays - 1);
-				r.setTrialExpiresOn(endInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE));
+			if (c.getTrialExpiresOn() != null) {
+				r.setTrialExpiresOn(c.getTrialExpiresOn().format(DateTimeFormatter.ISO_LOCAL_DATE));
+			} else {
+				Instant launched = c.getPortalLaunchedAt();
+				if (launched != null && effectiveDays >= 1) {
+					LocalDate anchor = launched.atZone(TRIAL_ZONE).toLocalDate();
+					LocalDate endInclusive = anchor.plusDays((long) effectiveDays - 1);
+					r.setTrialExpiresOn(endInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE));
+				} else {
+					r.setTrialExpiresOn(null);
+				}
+			}
+		} else {
+			// For subscriptions we still show expiry if present (same DB column used in admin grid).
+			if (c.getTrialExpiresOn() != null) {
+				r.setTrialExpiresOn(c.getTrialExpiresOn().format(DateTimeFormatter.ISO_LOCAL_DATE));
 			} else {
 				r.setTrialExpiresOn(null);
 			}
-		} else {
-			r.setTrialExpiresOn(null);
 			r.setStorageAllocatedMb(limitMb != null && limitMb > 0 ? limitMb : null);
 		}
 
@@ -182,6 +193,9 @@ public class EdukifyClientService {
 		c.setSubdomain(subdomain);
 		c.setSubscription("Trial");
 		c.setPortalLaunchedAt(Instant.now());
+		int defaultTrialDays = 14;
+		LocalDate anchor = c.getPortalLaunchedAt().atZone(TRIAL_ZONE).toLocalDate();
+		c.setTrialExpiresOn(anchor.plusDays(defaultTrialDays - 1L));
 
 		EdukifyClient saved = eduClientRepository.save(c);
 		return toResponse(saved);

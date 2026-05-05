@@ -21,18 +21,30 @@ export default function TopDashboard() {
   const totalUsers = users.length
 
   return (
-    <div className="bg-gray-100 py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 mb-[-1.25rem] rounded-lg ">
-      <div className="w-full max-w-4xl mx-auto">
-        <h1 className="text-2xl sm:text-3xl font-semibold text-gray-800 mb-3">Dashboard Overview</h1>
+    <div className="-mx-4 mb-[-1.25rem] rounded-b-2xl bg-transparent py-4 px-4 sm:-mx-6 sm:px-6">
+      <div className="mx-auto w-full max-w-4xl">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+            Dashboard overview
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-600">
+            Quick snapshot of your platform. Invite teams and learners from Clients and tune the experience under
+            Settings.
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-xl">
-          <div className="flex items-center justify-between bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition">
-            <div>
-              <p className="text-sm text-gray-500 uppercase tracking-wide">Total Users</p>
-              <h2 className="text-4xl font-bold text-gray-800 mt-2">{totalUsers}</h2>
+        <div className="grid max-w-xl grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="group relative flex items-center justify-between overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-6 shadow-md ring-1 ring-slate-900/[0.04] transition hover:border-sky-200/90 hover:shadow-lg hover:shadow-sky-900/10">
+            <div
+              className="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-50/90 via-transparent to-cyan-50/50 opacity-0 transition group-hover:opacity-100"
+              aria-hidden
+            />
+            <div className="relative">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total users</p>
+              <h2 className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-slate-900">{totalUsers}</h2>
             </div>
-            <div className="bg-green-100 p-4 rounded-xl">
-              <Users className="text-green-600" size={28} />
+            <div className="relative rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 p-4 shadow-inner">
+              <Users className="text-emerald-700" size={28} strokeWidth={2} />
             </div>
           </div>
         </div>

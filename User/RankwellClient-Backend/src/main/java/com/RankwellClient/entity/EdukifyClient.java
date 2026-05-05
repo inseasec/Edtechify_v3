@@ -1,6 +1,7 @@
 package com.RankwellClient.entity;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -47,7 +48,7 @@ public class EdukifyClient {
 	@Column(name = "portal_launched_at")
 	private Instant portalLaunchedAt;
 
-	@Column(name = "portal_access_status", length = 32)
+	@Column(name = "portal_live_status", length = 32)
 	private String portalAccessStatus;
 
 	@Column(name = "trial_limit_days")
@@ -55,6 +56,10 @@ public class EdukifyClient {
 
 	@Column(name = "trial_limit_storage_mb")
 	private Integer trialLimitStorageMb;
+
+	/** Inclusive last day of trial; same as admin clients grid “Expires”. */
+	@Column(name = "trial_expires_on")
+	private LocalDate trialExpiresOn;
 
 	public Long getId() {
 		return id;
@@ -166,5 +171,13 @@ public class EdukifyClient {
 
 	public void setTrialLimitStorageMb(Integer trialLimitStorageMb) {
 		this.trialLimitStorageMb = trialLimitStorageMb;
+	}
+
+	public LocalDate getTrialExpiresOn() {
+		return trialExpiresOn;
+	}
+
+	public void setTrialExpiresOn(LocalDate trialExpiresOn) {
+		this.trialExpiresOn = trialExpiresOn;
 	}
 }

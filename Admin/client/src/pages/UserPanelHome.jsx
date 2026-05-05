@@ -16,9 +16,15 @@ import {
   Upload,
   User,
 } from 'lucide-react'
-import AboutTemplates from '@/Components/AboutTemplates'
 import ImageTemplates from '@/Components/ImageTemplates'
 import HomeTemplates from '../Components/HomeTemplates'
+import MarketingHomePage from '@user-site/Components/marketing/MarketingHomePage.jsx'
+import {
+  HOME_OFFERINGS_INTRO_LIVE_DEFAULT,
+  HOME_HERO_TITLE_LIVE_DEFAULT,
+  HOME_HERO_SUBTITLE_LIVE_DEFAULT,
+  HOME_TRUST_STRIP_LIVE_DEFAULT,
+} from '@user-site/constants/homePageLiveDefaults.js'
 function courseImageUrl(filename, base) {
   const baseUrl = base?.replace(/\/$/, '') ?? ''
   if (!filename || typeof filename !== 'string') return ''
@@ -56,9 +62,6 @@ export default function UserPanelHome() {
   const [customImgTemplateOpen, setImgCustomTemplateOpen] = useState(false)
   const [logoObjectUrl, setLogoObjectUrl] = useState(null)
   const [bannerObjectUrl, setBannerObjectUrl] = useState(null)
-  const [showHomeBannerUploadModal, setShowHomeBannerUploadModal] = useState(false)
-  const [homeBannerCustomTemplateOpen, setHomeBannerCustomTemplateOpen] = useState(false)
-
   useEffect(() => {
     if (!files.logo) {
       setLogoObjectUrl(null)
@@ -148,33 +151,55 @@ export default function UserPanelHome() {
 
       {!isLoading && (
         <>
-          {/* ===== ADMIN NAVBAR ===== */}
-          <nav className="w-full bg-[#F97316]">
-            <div className="px-4">
-              <div className="flex h-20 items-center justify-between">
-                <div className="flex items-center gap-6">
+          <div className="space-y-6">
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-5 shadow-sm md:px-6">
+              <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <FileText className="h-5 w-5 shrink-0 text-sky-600" />
+                    <h2 className="text-lg font-semibold">Home page content</h2>
+                  </div>
+                  <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                    Matches the public <strong className="font-medium text-slate-800">Home</strong> layout.
+                    Use <strong className="font-medium text-slate-800">Update</strong> in the panel header to publish (logo, banner, and fields below).
+                    The hero uses <strong className="font-medium text-slate-800">one</strong> banner image or video behind all three slides—the carousel only rotates the headlines.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(true)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-sky-700"
+                >
+                  <Upload className="h-4 w-4" />
+                  Change homepage banner
+                </button>
+              </div>
+
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Logo</span>
+                <div className="flex items-center gap-4">
                   <div className="group relative">
                     {logoPreview ? (
-                      <div className="relative h-12 w-12">
+                      <div className="relative h-14 w-14">
                         <img
                           src={logoPreview}
                           alt="Company logo"
-                          className="h-full w-full rounded-lg bg-white object-contain p-1"
+                          className="h-full w-full rounded-lg border border-slate-200 bg-white object-contain p-1"
                         />
                         <label
                           htmlFor="user-panel-logo-upload"
-                          className="absolute -right-2 -top-2 cursor-pointer rounded-full bg-orange-500 p-1.5 text-white shadow-md transition hover:bg-orange-600"
+                          className="absolute -right-2 -top-2 cursor-pointer rounded-full bg-sky-600 p-1.5 text-white shadow-md transition hover:bg-sky-700"
                         >
                           <Upload size={14} />
                         </label>
                       </div>
                     ) : (
-                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-100 hover:border-blue-500">
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50">
                         <label
                           htmlFor="user-panel-logo-upload"
-                          className="mt-1 inline-block cursor-pointer rounded-full bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+                          className="cursor-pointer rounded-md bg-slate-800 px-2 py-1 text-xs text-white hover:bg-slate-900"
                         >
-                          Upload Logo
+                          Upload
                         </label>
                       </div>
                     )}
@@ -187,126 +212,59 @@ export default function UserPanelHome() {
                       onChange={handleLogoChange}
                     />
                   </div>
-                  <div className="flex flex-col text-white">
-                    <span className="text-xs">Our Parent Company</span>
-                    <span className="text-sm font-semibold">Seasec Pvt Ltd</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 text-white">
-                  <div className="flex items-center gap-2">
-                    <User className="h-6 w-6" />
-                    <span className="font-medium">Profile</span>
-                  </div>
+                  <p className="text-xs text-slate-500">Shown in the hero panel and footer on the live site.</p>
                 </div>
               </div>
-            </div>
-          </nav>
 
-          {/* ===== BANNER ===== */}
-          <div className="relative mb-0 w-full">
-            <div className="relative w-full overflow-hidden bg-black">
-              {bannerDisplay ? (
-                <div className="relative h-[400px] w-full">
-                  {bannerDisplay.type === 'video' ? (
-                    <video
-                      key={bannerDisplay.src}
-                      src={bannerDisplay.src}
-                      className="h-full w-full object-cover"
-                      controls
-                      autoPlay
-                      muted
-                    />
-                  ) : (
-                    <img
-                      src={bannerDisplay.src}
-                      alt="Banner"
-                      className="h-full w-full object-cover"
-                    />
-                  )}
-                  <div className="absolute right-4 top-4 z-20">
-                    <button
-                      type="button"
-                      onClick={() => setShowUploadModal(true)}
-                      className="flex cursor-pointer items-center gap-1 rounded-lg bg-green-600 p-2 text-white shadow-lg hover:bg-green-700"
-                    >
-                      <Upload className="h-5 w-5" />
-                      <span className="text-sm">Change</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative flex h-[400px] w-full flex-col items-center justify-center bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <div className="mb-4 text-center">
-                    <Image className="mx-auto mb-4 h-20 w-20 text-gray-400" />
-                    <h3 className="mb-2 text-xl font-semibold text-gray-700">No Banner Uploaded</h3>
-                    <p className="mb-4 text-gray-500">Upload an image or video for the homepage banner</p>
-                  </div>
-                  <div className="absolute bottom-6 right-6">
-                    <button
-                      type="button"
-                      onClick={() => setShowUploadModal(true)}
-                      className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-5 py-2.5 text-black shadow-md transition hover:shadow-lg"
-                    >
-                      <Upload className="h-5 w-5 text-black" />
-                      <span className="font-medium">Upload Banner</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ===== PUBLIC SITE COPY (saved with organization) ===== */}
-          <div className="border-b border-slate-200 bg-slate-50 px-4 py-8 md:px-8">
-            <div className="mx-auto max-w-4xl">
-              <div className="mb-4 flex items-center gap-2 text-slate-800">
-                <FileText className="h-5 w-5 shrink-0 text-sky-600" />
-                <h2 className="text-lg font-semibold">Homepage text (live marketing site)</h2>
-              </div>
-              <p className="mb-6 text-sm text-slate-600">
-                These fields power the public <strong>Home</strong> hero and bands.                 Use an <strong>institutional, precise tone</strong> (institutes and training
-                organizations—not generic “startup” hype). Hero title can use line breaks for
-                emphasis. Leave blank for Edukify defaults. Save with <strong>Update</strong> (same
-                as logo and banner).
-              </p>
               <div className="space-y-4">
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
                     Hero title
                   </span>
+                  <p className="mb-2 text-xs leading-relaxed text-slate-500">
+                    Main headline for <strong className="font-medium text-slate-600">carousel slide 1</strong> (the hero rotates three headlines).
+                  </p>
                   <textarea
                     name="orgHome.homeHeroTitle"
                     rows={3}
                     value={formData.orgHome?.homeHeroTitle ?? ''}
                     onChange={handleTextChange}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-                    placeholder={'e.g. Hey institutes — still not on the web?\nHave your own EdTech platform launched through us.'}
+                    placeholder={HOME_HERO_TITLE_LIVE_DEFAULT}
                   />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Hero subtitle
+                    Hero carousel — slide 2 headline
                   </span>
+                  <p className="mb-2 text-xs leading-relaxed text-slate-500">
+                    Same field as before (<code className="rounded bg-slate-100 px-1 py-px text-[11px]">homeHeroSubtitle</code>
+                    ). Controls the <strong className="font-medium text-slate-600">second</strong> rotating hero headline only.
+                  </p>
                   <textarea
                     name="orgHome.homeHeroSubtitle"
                     rows={3}
                     value={formData.orgHome?.homeHeroSubtitle ?? ''}
                     onChange={handleTextChange}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-                    placeholder="Plain words: why they are offline, what blocks them (skills, cost, time), and that you remove that wall—no jargon."
+                    placeholder={HOME_HERO_SUBTITLE_LIVE_DEFAULT}
                   />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Trust strip (one line)
+                    Hero carousel — slide 3 headline
                   </span>
-                  <input
-                    type="text"
+                  <p className="mb-2 text-xs leading-relaxed text-slate-500">
+                    Same field as before (<code className="rounded bg-slate-100 px-1 py-px text-[11px]">homeTrustStrip</code>
+                    ). Controls the <strong className="font-medium text-slate-600">third</strong> rotating hero headline only.
+                  </p>
+                  <textarea
                     name="orgHome.homeTrustStrip"
+                    rows={3}
                     value={formData.orgHome?.homeTrustStrip ?? ''}
                     onChange={handleTextChange}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-                    placeholder="e.g. Built for training companies · Hosting included"
+                    placeholder={HOME_TRUST_STRIP_LIVE_DEFAULT}
                   />
                 </label>
                 <label className="block">
@@ -319,9 +277,34 @@ export default function UserPanelHome() {
                     value={formData.orgHome?.homeOfferingsIntro ?? ''}
                     onChange={handleTextChange}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-                    placeholder="Optional intro above capability cards; replaces default paragraph if set."
+                    placeholder={HOME_OFFERINGS_INTRO_LIVE_DEFAULT}
                   />
                 </label>
+              </div>
+            </div>
+
+            <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-slate-50">
+              <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center px-3 py-2">
+                <span className="rounded-full border border-slate-200 bg-white/95 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm backdrop-blur-sm">
+                  Preview — same layout as public Home; one shared banner, rotating text (links disabled)
+                </span>
+              </div>
+              <div className="pointer-events-none absolute right-3 top-12 z-10 sm:top-10">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(true)}
+                  className="pointer-events-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-md backdrop-blur-sm hover:bg-white"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  Banner
+                </button>
+              </div>
+              <div className="pt-10">
+                <MarketingHomePage
+                  bannerDisplay={bannerDisplay}
+                  orgHome={formData.orgHome ?? {}}
+                  previewMode
+                />
               </div>
             </div>
           </div>

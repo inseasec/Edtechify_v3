@@ -7,12 +7,6 @@ import { Eye, EyeOff } from 'lucide-react';
 import Swal from 'sweetalert2';
 import bgImage from '../assets/pexels-fauxels-3184460-1.jpg';
 import LoadingSpinner from '@/utils/LoadingSpinner';
-import {
-  STATIC_DEMO_JWT,
-  isStaticDemoEmail,
-  isStaticDemoLogin,
-} from '@/utils/staticDemoLogin';
-
 export default function Login() {
   const [admin, setAdmin] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
@@ -95,17 +89,6 @@ export default function Login() {
 
   const onSubmitOtp = async (e) => {
     e.preventDefault();
-    if (isStaticDemoEmail(admin.email) && otp.trim()) {
-      setLoading(true);
-      try {
-        localStorage.setItem('email', admin.email);
-        localStorage.setItem('token', STATIC_DEMO_JWT);
-        runSuccessFlow(getUserRole());
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
     if (!baseUrl) {
       await Swal.fire({
         title: 'Missing API URL',
@@ -152,19 +135,6 @@ export default function Login() {
     e.preventDefault();
     const ok = validateForm(admin.email, admin.password);
     if (!ok) return;
-
-    if (isStaticDemoLogin(admin.email, admin.password)) {
-      setLoading(true);
-      try {
-        localStorage.setItem('email', admin.email.trim().toLowerCase());
-        localStorage.setItem('token', STATIC_DEMO_JWT);
-        const userRole = getUserRole();
-        runSuccessFlow(userRole);
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
 
     if (!baseUrl) {
       await Swal.fire({

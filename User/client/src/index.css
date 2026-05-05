@@ -115,3 +115,19 @@ body {
     background: var(--code-bg);
   }
 }
+
+/* Home hero: text swap on carousel arrows (shared video/image backdrop) */
+@keyframes home-hero-copy-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.home-hero-copy-enter {
+  animation: home-hero-copy-enter 0.42s ease-out;
+}

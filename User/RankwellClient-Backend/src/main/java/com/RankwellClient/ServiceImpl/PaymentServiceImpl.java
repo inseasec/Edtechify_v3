@@ -1,6 +1,7 @@
 package com.RankwellClient.ServiceImpl;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,8 +16,12 @@ import com.RankwellClient.dto.RazorpayResponse;
 import com.RankwellClient.entity.Payment;
 import com.RankwellClient.entity.Payment.PaymentStatus;
 import com.RankwellClient.entity.PaymentGatewayConfig;
+import com.RankwellClient.entity.SubscriptionPlan;
+import com.RankwellClient.entity.EdukifyClient;
 import com.RankwellClient.entity.Users;
+import com.RankwellClient.repository.EdukifyClientRepository;
 import com.RankwellClient.repository.PaymentRepository;
+import com.RankwellClient.repository.SubscriptionPlanRepository;
 import com.RankwellClient.services.InvoiceService;
 import com.RankwellClient.services.PaymentConfigService;
 import com.RankwellClient.services.PaymentService;
@@ -36,6 +41,12 @@ public class PaymentServiceImpl implements PaymentService{
 
 	@Autowired
 	private PaymentConfigService paymentConfigService;
+
+	@Autowired
+	private SubscriptionPlanRepository subscriptionPlanRepository;
+
+	@Autowired
+	private EdukifyClientRepository edukifyClientRepository;
 
 	@Override
 	public String createOrder(Map<String,Object> paymentInfo) {
@@ -79,6 +90,16 @@ public class PaymentServiceImpl implements PaymentService{
 	            // Long courseId = Long.valueOf(paymentInfo.get("courseId"));
 	            payment.setUser(new Users(userId));
 	            // payment.setCourses(new Courses(courseId));
+
+				// Optional: subscription checkout (plan id comes from frontend)
+				Object planObj = paymentInfo.get("subscriptionPlanId");
+				if (planObj != null) {
+					try {
+						payment.setSubscriptionPlanId(Long.valueOf(planObj.toString()));
+					} catch (Exception ignored) {
+						// keep null if invalid
+					}
+				}
 
 
 
@@ -165,7 +186,35 @@ public class PaymentServiceImpl implements PaymentService{
 	            payment.setPaymentId(paymentId);
 	            payment.setCreatedOn(LocalDateTime.now());
 	            paymentRepository.save(payment);
-	            invoiceService.generateInvoice(payment);
+				try {
+					invoiceService.generateInvoice(payment);
+				} catch (Exception e) {
+					// Payment is legitimate; do not fail verification response due to invoice settings issues.
+					e.printStackTrace();
+					return ResponseEntity.ok("Payment verified, but invoice generation failed: " + e.getMessage());
+				}
+
+				// Apply subscription plan limits to the launched portal (clients table)
+				if (payment.getSubscriptionPlanId() != null && payment.getUser() != null && payment.getUser().getId() != null) {
+					SubscriptionPlan plan = subscriptionPlanRepository.findById(payment.getSubscriptionPlanId()).orElse(null);
+					if (plan != null) {
+						EdukifyClient client = edukifyClientRepository.findByUserId(payment.getUser().getId()).orElse(null);
+						if (client != null) {
+							Integer days = plan.getDurationDays() != null ? plan.getDurationDays() : 0;
+							Integer mb = plan.getStorageLimitMb() != null ? plan.getStorageLimitMb() : null;
+							LocalDate today = LocalDate.now();
+							LocalDate endInclusive = (days != null && days > 0) ? today.plusDays(days.longValue() - 1L) : null;
+
+							// Show plan name in UIs (admin grid + user portal) instead of generic "Subscription".
+							client.setSubscription(plan.getName());
+							client.setPortalAccessStatus("ACTIVE");
+							client.setTrialLimitDays(days != null && days > 0 ? days : null);
+							client.setTrialLimitStorageMb(mb);
+							client.setTrialExpiresOn(endInclusive);
+							edukifyClientRepository.save(client);
+						}
+					}
+				}
 	        }
 
 	        return ResponseEntity.ok("Payment verified");

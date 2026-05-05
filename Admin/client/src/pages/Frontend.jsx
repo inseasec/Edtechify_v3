@@ -3,6 +3,12 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import api from '@/lib/api'
 import { showErrorToast, showSuccessToast } from '@/utils/toastUtils'
+import {
+  HOME_HERO_TITLE_LIVE_DEFAULT,
+  HOME_HERO_SUBTITLE_LIVE_DEFAULT,
+  HOME_TRUST_STRIP_LIVE_DEFAULT,
+  HOME_OFFERINGS_INTRO_LIVE_DEFAULT,
+} from '@user-site/constants/homePageLiveDefaults.js'
 
 const ORG_DETAILS_PATH = '/organizations/details'
 const ORG_SAVE_PATH = '/organizations/addUpdateDetails'
@@ -38,6 +44,32 @@ function setByPath(obj, path, value) {
   cur[parts[parts.length - 1]] = value
 }
 
+/** When CRM saved null/empty, show the same copy the public site uses (see homePageLiveDefaults). */
+function coalesceHomeTextToLiveDefault(saved, liveDefault) {
+  if (saved == null) return liveDefault
+  if (typeof saved === 'string' && saved.trim() === '') return liveDefault
+  return saved
+}
+
+/** If unchanged from built-in marketing copy, persist empty so the live site keeps template/styling. */
+function normalizeOrgHomeTextsForSave(orgHome) {
+  if (!orgHome) return orgHome
+  const o = { ...orgHome }
+  if ((o.homeHeroTitle ?? '').trim() === HOME_HERO_TITLE_LIVE_DEFAULT.trim()) {
+    o.homeHeroTitle = ''
+  }
+  if ((o.homeHeroSubtitle ?? '').trim() === HOME_HERO_SUBTITLE_LIVE_DEFAULT.trim()) {
+    o.homeHeroSubtitle = ''
+  }
+  if ((o.homeTrustStrip ?? '').trim() === HOME_TRUST_STRIP_LIVE_DEFAULT.trim()) {
+    o.homeTrustStrip = ''
+  }
+  if ((o.homeOfferingsIntro ?? '').trim() === HOME_OFFERINGS_INTRO_LIVE_DEFAULT.trim()) {
+    o.homeOfferingsIntro = ''
+  }
+  return o
+}
+
 function defaultForm() {
   return {
     id: null,
@@ -62,10 +94,10 @@ function defaultForm() {
       completeHeading: null,
       trendingCourseHeading: null,
       termsAndConditions: null,
-      homeHeroTitle: '',
-      homeHeroSubtitle: '',
-      homeTrustStrip: '',
-      homeOfferingsIntro: '',
+      homeHeroTitle: HOME_HERO_TITLE_LIVE_DEFAULT,
+      homeHeroSubtitle: HOME_HERO_SUBTITLE_LIVE_DEFAULT,
+      homeTrustStrip: HOME_TRUST_STRIP_LIVE_DEFAULT,
+      homeOfferingsIntro: HOME_OFFERINGS_INTRO_LIVE_DEFAULT,
     },
     orgAboutUs: {
       aboutWallpaper: null,
@@ -140,6 +172,24 @@ function mapDetailsToForm(raw) {
       teamImages: [...(d.orgTeamGallery.teamImages ?? [])],
     }
   }
+
+  next.orgHome.homeHeroTitle = coalesceHomeTextToLiveDefault(
+    next.orgHome.homeHeroTitle,
+    HOME_HERO_TITLE_LIVE_DEFAULT,
+  )
+  next.orgHome.homeHeroSubtitle = coalesceHomeTextToLiveDefault(
+    next.orgHome.homeHeroSubtitle,
+    HOME_HERO_SUBTITLE_LIVE_DEFAULT,
+  )
+  next.orgHome.homeTrustStrip = coalesceHomeTextToLiveDefault(
+    next.orgHome.homeTrustStrip,
+    HOME_TRUST_STRIP_LIVE_DEFAULT,
+  )
+  next.orgHome.homeOfferingsIntro = coalesceHomeTextToLiveDefault(
+    next.orgHome.homeOfferingsIntro,
+    HOME_OFFERINGS_INTRO_LIVE_DEFAULT,
+  )
+
   return next
 }
 
@@ -210,6 +260,7 @@ export default function Frontend() {
   const buildOrganizationJson = useCallback(() => {
     const payload = JSON.parse(JSON.stringify(formData))
     if (payload.orgHome) {
+      payload.orgHome = normalizeOrgHomeTextsForSave(payload.orgHome)
       payload.orgHome.videos = payload.orgHome.videos ?? []
       payload.orgHome.images = payload.orgHome.images ?? []
     }

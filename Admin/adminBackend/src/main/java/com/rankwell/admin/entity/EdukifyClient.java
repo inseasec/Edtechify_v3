@@ -1,6 +1,7 @@
 package com.rankwell.admin.entity;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -47,8 +48,8 @@ public class EdukifyClient {
 	@Column(name = "portal_launched_at")
 	private Instant portalLaunchedAt;
 
-	/** {@code ACTIVE} | {@code TRIAL_EXPIRED} — nullable until first admin sync / DDL backfill */
-	@Column(name = "portal_access_status", length = 32)
+	/** Persisted live status: {@code YES} (live) / {@code NO} (not live). */
+	@Column(name = "portal_live_status", length = 32)
 	private String portalAccessStatus;
 
 	/** Nullable: when set, replaces platform default trial length for this portal. */
@@ -58,6 +59,13 @@ public class EdukifyClient {
 	/** Nullable: when set, replaces platform default storage cap (megabytes). */
 	@Column(name = "trial_limit_storage_mb")
 	private Integer trialLimitStorageMb;
+
+	/**
+	 * Last calendar day included in the trial (inclusive). Aligned with admin “Expires” date;
+	 * persisted so the user portal shows the same date without timezone drift.
+	 */
+	@Column(name = "trial_expires_on")
+	private LocalDate trialExpiresOn;
 
 	public Long getId() {
 		return id;
@@ -169,5 +177,13 @@ public class EdukifyClient {
 
 	public void setTrialLimitStorageMb(Integer trialLimitStorageMb) {
 		this.trialLimitStorageMb = trialLimitStorageMb;
+	}
+
+	public LocalDate getTrialExpiresOn() {
+		return trialExpiresOn;
+	}
+
+	public void setTrialExpiresOn(LocalDate trialExpiresOn) {
+		this.trialExpiresOn = trialExpiresOn;
 	}
 }

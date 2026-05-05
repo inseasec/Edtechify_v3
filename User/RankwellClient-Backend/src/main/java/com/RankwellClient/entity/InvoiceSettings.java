@@ -24,6 +24,12 @@ public class InvoiceSettings {
 	private Long invoiceDiscount;
 	private Long invoiceTaxRate;
 
+	// Invoicing profile (can differ from website branding / organization details)
+	private String invoiceCompanyName;
+	private String invoiceCompanyAddress;
+	private String invoiceCompanyLogoPath;
+	private String invoiceCompanyGSTNo;
+
 
 	public Long getId() {
 		return id;
@@ -79,6 +85,38 @@ public class InvoiceSettings {
 
 	public void setInvoiceTaxRate(Long invoiceTaxRate) {
 		this.invoiceTaxRate = invoiceTaxRate;
+	}
+
+	public String getInvoiceCompanyName() {
+		return invoiceCompanyName;
+	}
+
+	public void setInvoiceCompanyName(String invoiceCompanyName) {
+		this.invoiceCompanyName = invoiceCompanyName;
+	}
+
+	public String getInvoiceCompanyAddress() {
+		return invoiceCompanyAddress;
+	}
+
+	public void setInvoiceCompanyAddress(String invoiceCompanyAddress) {
+		this.invoiceCompanyAddress = invoiceCompanyAddress;
+	}
+
+	public String getInvoiceCompanyLogoPath() {
+		return invoiceCompanyLogoPath;
+	}
+
+	public void setInvoiceCompanyLogoPath(String invoiceCompanyLogoPath) {
+		this.invoiceCompanyLogoPath = invoiceCompanyLogoPath;
+	}
+
+	public String getInvoiceCompanyGSTNo() {
+		return invoiceCompanyGSTNo;
+	}
+
+	public void setInvoiceCompanyGSTNo(String invoiceCompanyGSTNo) {
+		this.invoiceCompanyGSTNo = invoiceCompanyGSTNo;
 	}
 
     public InvoiceSettings() {

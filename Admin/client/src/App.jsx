@@ -8,6 +8,9 @@ import PagesCompanyDetails from './pages/PagesCompanyDetails'
 import AccountSettings from './pages/AccountSettings'
 import InvoiceSettings from './pages/InvoiceSettings'
 import AllInvoices from './pages/AllInvoices'
+import SubscriptionPlans from './pages/SubscriptionPlans'
+import SmtpServerSettings from './pages/SmtpServerSettings'
+import SmsServiceSettings from './pages/SmsServiceSettings'
 import CareersPage from './pages/CareersPage'
 import CareersSettingsPanel from './pages/CareersSettingsPanel'
 import CareersVideosPage from './pages/CareersVideosPage'
@@ -41,12 +44,19 @@ const adminChildRoutes = (
     <Route path="company-details/account-settings" element={<AccountSettings />} />
     <Route path="company-details/invoice-settings" element={<InvoiceSettings />} />
     <Route path="company-details/all-invoices" element={<AllInvoices />} />
+    <Route path="company-details/subscription-plans" element={<SubscriptionPlans />} />
+    <Route path="company-details/support-chat-settings" element={<ChatSupport />} />
+    <Route path="company-details/smtp-server-settings" element={<SmtpServerSettings />} />
+    <Route path="company-details/sms-service-settings" element={<SmsServiceSettings />} />
     <Route path="settings/career" element={<CareersSettingsPanel />} />
     <Route path="careers/videos" element={<CareersVideosPage />} />
     <Route path="careers/applicant/:applicantId" element={<ApplicantDetails />} />
     <Route path="careers" element={<CareersPage />} />
     <Route path="careers/:section" element={<CareersPage />} />
-    <Route path="chat-support" element={<ChatSupport />} />
+    <Route
+      path="chat-support"
+      element={<Navigate to="../company-details/support-chat-settings" replace />}
+    />
     <Route path="user-panel" element={<Frontend />}>
       <Route index element={<Navigate to="home" replace />} />
       <Route path="home" element={<UserPanelHome />} />

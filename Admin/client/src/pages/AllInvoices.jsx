@@ -7,11 +7,12 @@ const BillingInvoices = () => {
   const baseUrl = window._CONFIG_.VITE_API_BASE_URL;
   const [invoices, setInvoices] = useState([])
   const [orgData, setOrgData] = useState(null)
-  const [invoiceSettings, setInvoiceSettings] = useState(null)
+  const [clientCompanyByUserId, setClientCompanyByUserId] = useState({})
   const [searchResults, setSearchResults] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [invoiceData, setInvoiceData] = useState(null)
+  const [autoDownload, setAutoDownload] = useState(false)
 
   const InvoiceInfo = async () => {
     try {
@@ -38,9 +39,27 @@ const BillingInvoices = () => {
     }
   }
 
+  const fetchClientCompanies = async () => {
+    try {
+      const res = await api.get('/clients/portal-rows')
+      const rows = Array.isArray(res.data) ? res.data : []
+      const map = {}
+      for (const r of rows) {
+        const uid = r?.userId
+        const name = r?.companyName
+        if (uid != null && name) map[String(uid)] = String(name)
+      }
+      setClientCompanyByUserId(map)
+    } catch (error) {
+      console.error('error fetching client portal rows:', error)
+      setClientCompanyByUserId({})
+    }
+  }
+
   useEffect(() => {
     fetchOrgData()
     InvoiceInfo()
+    fetchClientCompanies()
   }, [])
  
   useEffect(() => {
@@ -114,9 +133,10 @@ const BillingInvoices = () => {
           <tr className="bg-[#F97316] text-sm text-white">
             <th className="px-2 py-2">Invoice Id</th>
             <th className="px-2 py-2">Invoice Date</th>
-            <th className="px-2 py-2">Course Name</th>
+            <th className="px-2 py-2">Plan</th>
             <th className="px-2 py-2">Customer Name</th>
             <th className="px-2 py-2">Status</th>
+            <th className="px-2 py-2">Download</th>
             <th className="px-2 py-2">More</th>
           </tr>
         </thead>
@@ -125,17 +145,35 @@ const BillingInvoices = () => {
             <tr key={invoice.invoiceId ?? invoice.id} className="border-t text-sm">
               <td className="px-4 py-3 text-center">{invoice.invoiceId?.replace(/\s+/g, "")}</td>
               <td className="px-4 py-3">{formattedDate(invoice.invoiceDate)}</td>
-              {invoice.payment?.courses?.length === 1 ? (
-                <td className="px-4 py-3">{invoice.payment.courses[0].courseName}</td>
-              ) : (
-                <td className="px-4 py-3">Multiple courses</td>
-              )}
-              <td className="px-4 py-3">{invoice.users?.userName}</td>
+              <td className="px-4 py-3">
+                {invoice?.itemName
+                  ? invoice.itemName
+                  : invoice.payment?.courses?.length === 1
+                    ? invoice.payment.courses[0].courseName
+                    : "Multiple courses"}
+              </td>
+              <td className="px-4 py-3">
+                {clientCompanyByUserId[String(invoice?.users?.id)] || invoice?.users?.userName || '—'}
+              </td>
               <td className="px-4 py-3 text-center">{invoice.payment?.status}</td>
               <td className="px-4 py-3 text-center">
                 <button
                   type="button"
                   onClick={() => {
+                    setAutoDownload(true)
+                    setInvoiceData(invoice)
+                  }}
+                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50"
+                  title="Download"
+                >
+                  <i className="ri-download-2-line text-lg" />
+                </button>
+              </td>
+              <td className="px-4 py-3 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAutoDownload(false)
                     setInvoiceData(invoice)
                   }}
                   className="rounded-lg bg-green-500 px-3 py-1 text-white hover:bg-green-700"
@@ -159,8 +197,11 @@ const BillingInvoices = () => {
       {invoiceData && (
         <Invoice
           invoice={invoiceData}
-          invoiceSettings={invoiceSettings}
-          onClose={() => setInvoiceData(null)}
+          autoDownload={autoDownload}
+          onClose={() => {
+            setInvoiceData(null)
+            setAutoDownload(false)
+          }}
           orgData={orgData}
         />
       )}

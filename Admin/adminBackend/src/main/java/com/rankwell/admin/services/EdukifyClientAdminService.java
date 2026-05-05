@@ -118,6 +118,9 @@ public class EdukifyClientAdminService {
 		}
 		EdukifyClient client = eduClientRepository.findByUserId(userId).orElseThrow(
 				() -> new java.util.NoSuchElementException("No launched portal for this user"));
+		Users owner = userRepository.findById(userId)
+				.orElseThrow(() -> new java.util.NoSuchElementException("User not found"));
+		PlatformTrialDefaults platformDefaults = loadPlatformDefaultsSnapshot();
 		if (Boolean.TRUE.equals(dto.getResetToPlatformDefaults())) {
 			client.setTrialLimitDays(null);
 			client.setTrialLimitStorageMb(null);
@@ -137,11 +140,67 @@ public class EdukifyClientAdminService {
 			client.setTrialLimitDays(d);
 			client.setTrialLimitStorageMb(mb);
 		}
+		refreshTrialExpiresOn(client, owner, platformDefaults);
 		eduClientRepository.save(client);
 		portalTrialAccessSyncService.reconcileAllClients();
-		Users owner = userRepository.findById(userId)
-				.orElseThrow(() -> new java.util.NoSuchElementException("User not found"));
 		return toRow(owner, loadPlatformDefaultsSnapshot());
+	}
+
+	public ClientPortalRowDto updatePortalLiveStatusForUser(Long userId, String desiredStatus) {
+		if (userId == null) {
+			throw new IllegalArgumentException("userId is required");
+		}
+		String v = desiredStatus == null ? "" : desiredStatus.trim().toUpperCase();
+		if (!(PortalTrialAccessSyncService.STATUS_YES.equals(v) || PortalTrialAccessSyncService.STATUS_NO.equals(v))) {
+			throw new IllegalArgumentException("portalLiveStatus must be YES or NO");
+		}
+		EdukifyClient c = eduClientRepository.findByUserId(userId)
+				.orElseThrow(() -> new java.util.NoSuchElementException("Client not found"));
+		if (PortalTrialAccessSyncService.STATUS_YES.equals(v) && c.getTrialExpiresOn() != null) {
+			java.time.LocalDate today = java.time.LocalDate.now();
+			if (today.isAfter(c.getTrialExpiresOn())) {
+				throw new IllegalArgumentException("Cannot set Live = YES for an expired portal. Extend expiry date first.");
+			}
+		}
+		c.setPortalAccessStatus(v);
+		eduClientRepository.save(c);
+
+		Users u = userRepository.findById(userId)
+				.orElseThrow(() -> new java.util.NoSuchElementException("User not found"));
+		PlatformTrialDefaults platformDefaults = trialDefaultsRepository.findById(1L)
+				.orElseGet(() -> {
+					PlatformTrialDefaults d = new PlatformTrialDefaults();
+					d.setId(1L);
+					d.setTrialDurationDays(14);
+					d.setTrialStorageMb(512);
+					return d;
+				});
+		return toRow(u, platformDefaults);
+	}
+
+	private static boolean isTrialSubscription(EdukifyClient c) {
+		String plan = c.getSubscription();
+		return plan == null || plan.isBlank() || "trial".equalsIgnoreCase(plan.trim());
+	}
+
+	/** Persist inclusive last calendar day of the trial — matches admin “Expires” column. */
+	private static void refreshTrialExpiresOn(EdukifyClient client, Users owner, PlatformTrialDefaults def) {
+		if (!isTrialSubscription(client)) {
+			client.setTrialExpiresOn(null);
+			return;
+		}
+		int effectiveDays =
+				client.getTrialLimitDays() != null ? client.getTrialLimitDays() : def.getTrialDurationDays();
+		Instant anchorInstant = client.getPortalLaunchedAt();
+		if (anchorInstant == null) {
+			anchorInstant = owner.getCreatedAt();
+		}
+		if (anchorInstant == null) {
+			return;
+		}
+		LocalDate anchor = anchorInstant.atZone(ZoneId.systemDefault()).toLocalDate();
+		int days = Math.max(1, effectiveDays);
+		client.setTrialExpiresOn(anchor.plusDays(days - 1L));
 	}
 
 
@@ -193,6 +252,16 @@ public class EdukifyClientAdminService {
 		entity.setTrialStorageMb(mb);
 
 		trialDefaultsRepository.save(entity);
+
+		for (EdukifyClient portal : eduClientRepository.findAll()) {
+			if (!isTrialSubscription(portal) || portal.getTrialLimitDays() != null) {
+				continue;
+			}
+			userRepository.findById(portal.getUserId()).ifPresent((ownerUser) -> {
+				refreshTrialExpiresOn(portal, ownerUser, entity);
+				eduClientRepository.save(portal);
+			});
+		}
 
 		portalTrialAccessSyncService.reconcileAllClients();
 
@@ -270,10 +339,13 @@ public class EdukifyClientAdminService {
 
 		LocalDate anchorDate = portalLiveAnchor.atZone(ZoneId.systemDefault()).toLocalDate();
 		row.setTrialAnchorDate(anchorDate.toString());
+		if (c.getTrialExpiresOn() != null) {
+			row.setTrialExpiresOn(c.getTrialExpiresOn().toString());
+		}
 
 		String pas = c.getPortalAccessStatus();
 		row.setPortalAccessStatus(
-				pas != null && !pas.isBlank() ? pas : PortalTrialAccessSyncService.STATUS_ACTIVE);
+				pas != null && !pas.isBlank() ? pas : PortalTrialAccessSyncService.STATUS_YES);
 
 		row.setTrialLimitDaysOverride(c.getTrialLimitDays());
 		row.setTrialLimitStorageMbOverride(c.getTrialLimitStorageMb());

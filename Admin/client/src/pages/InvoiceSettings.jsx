@@ -10,7 +10,8 @@ const InvoiceSettings = () => {
     const [msg, setMsg] = useState("");
     const [seriesMsg, setSeriesMsg] = useState("");
     const [isChange, setIsChange] = useState(false);
-    const [discount, setDiscount] = useState(456)
+    // Discount removed from global invoice settings.
+    const [discount, setDiscount] = useState(0)
     const [taxRate, setTaxRate] = useState(12)
     const [error, setError] = useState("")
     const [clicked, setClicked] = useState(false)
@@ -42,6 +43,10 @@ const InvoiceSettings = () => {
         invoiceSuffix: "",
         invoiceYear: " ",
         invoiceGST: "GST12345",
+        invoiceCompanyName: "",
+        invoiceCompanyAddress: "",
+        invoiceCompanyGSTNo: "",
+        invoiceCompanyLogoPath: "",
         invoiceDate: `${day}/${month}/${year}`,
         invoiceItems: [
             {
@@ -89,7 +94,7 @@ const InvoiceSettings = () => {
     const getInvoiceData = async () => {
         try {
             const response = await api.get('/invoiceSettings/getInvoiceValues');
-            setDiscount(response.data.invoiceDiscount ?? 456)
+            setDiscount(0)
             setTaxRate(response.data.invoiceTaxRate ?? 12)
             setInvoiceData(prev => ({
                 ...prev,
@@ -97,6 +102,10 @@ const InvoiceSettings = () => {
                 invoiceSuffix: response.data.invoiceSuffix || prev.invoiceSuffix,
                 invoiceYear: response.data.invoiceYear || prev.invoiceYear,
                 invoiceGST: response.data.invoiceGST || prev.invoiceGST,
+                invoiceCompanyName: response.data.invoiceCompanyName || prev.invoiceCompanyName || prev.companyName,
+                invoiceCompanyAddress: response.data.invoiceCompanyAddress || prev.invoiceCompanyAddress || prev.companyAddress,
+                invoiceCompanyGSTNo: response.data.invoiceCompanyGSTNo || prev.invoiceCompanyGSTNo || prev.invoiceGST,
+                invoiceCompanyLogoPath: response.data.invoiceCompanyLogoPath || prev.invoiceCompanyLogoPath || orgLogo,
             }));
 
         } catch (error) {
@@ -118,9 +127,12 @@ const InvoiceSettings = () => {
                 invoicePrefix: editData.invoicePrefix,
                 invoiceSuffix: editData.invoiceSuffix,
                 invoiceYear: editData.invoiceYear,
-                invoiceDiscount: discount,
                 invoiceTaxRate: taxRate,
-                invoiceGST: editData.invoiceGST
+                invoiceGST: editData.invoiceGST,
+                invoiceCompanyName: editData.invoiceCompanyName,
+                invoiceCompanyAddress: editData.invoiceCompanyAddress,
+                invoiceCompanyGSTNo: editData.invoiceCompanyGSTNo,
+                invoiceCompanyLogoPath: editData.invoiceCompanyLogoPath,
             });
 
         } catch (error) {
@@ -190,6 +202,25 @@ const InvoiceSettings = () => {
                 setLogo(reader.result);
             };
             reader.readAsDataURL(file);
+            uploadInvoiceLogo(file);
+        }
+    };
+
+    const uploadInvoiceLogo = async (file) => {
+        if (!file) return;
+        try {
+            const form = new FormData();
+            form.append("logo", file);
+            const res = await api.post("/invoiceSettings/uploadInvoiceLogo", form, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            const path = typeof res.data === "string" ? res.data : "";
+            if (path) {
+                setInvoiceData((prev) => ({ ...prev, invoiceCompanyLogoPath: path }));
+                setEditData((prev) => ({ ...prev, invoiceCompanyLogoPath: path }));
+            }
+        } catch (error) {
+            showErrorToast(error?.response?.data?.message || "Error uploading invoice logo");
         }
     };
 
@@ -207,8 +238,7 @@ const InvoiceSettings = () => {
         const safeRate = Number.isFinite(rate) ? rate : 0;
         const taxAmount = (total * safeRate) / 100;
         const subtotal = total + taxAmount;
-        const disc = Number(discount);
-        const safeDiscount = Number.isFinite(disc) ? disc : 0;
+        const safeDiscount = 0;
         return {
             total: total,
             taxAmount: taxAmount,
@@ -221,7 +251,11 @@ const InvoiceSettings = () => {
     const totals = calculateTotals(invoiceData.invoiceItems);
 
     const logoSrc =
-        logo || (orgLogo ? `${baseUrl}/${orgLogo}` : null) || null;
+        logo ||
+        (invoiceData.invoiceCompanyLogoPath
+            ? `${baseUrl}/${String(invoiceData.invoiceCompanyLogoPath).replace(/^\/+/, "")}`
+            : (orgLogo ? `${baseUrl}/${orgLogo}` : null)) ||
+        null;
     const fmt = (n) => (Number.isFinite(Number(n)) ? Number(n) : 0).toLocaleString();
 
 
@@ -302,13 +336,27 @@ const InvoiceSettings = () => {
                                 </div>
                             )}
                         </div>
-                        {/* Company Details */}
+                        {/* Invoicing Profile (separate from website branding) */}
                         <div className="mb-8 w-[40%]">
-                            <p className="text-lg font-semibold text-gray-800 mb-2">Company Details</p>
+                            <p className="text-lg font-semibold text-gray-800 mb-2">Invoicing Profile</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-900 mb-1">Company Name</label>
-                                    <p className="text-gray-500">{invoiceData.companyName}</p>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={editData.invoiceCompanyName}
+                                            onChange={(e) => {
+                                                setEditData({
+                                                    ...editData,
+                                                    invoiceCompanyName: e.target.value
+                                                })
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    ) : (
+                                        <p className="text-gray-500">{invoiceData.invoiceCompanyName || invoiceData.companyName}</p>
+                                    )}
                                     {/* {isEditing ? (
                                     <input
                                         type="text"
@@ -327,25 +375,39 @@ const InvoiceSettings = () => {
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-medium text-gray-900 mb-1">Address</label>
-                                    <p className="text-gray-500">{invoiceData.companyAddress}</p>
-
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium text-gray-900 mb-1">GST No.</label>
                                     {isEditing ? (
                                         <input
                                             type="text"
-                                            value={editData.invoiceGST}
+                                            value={editData.invoiceCompanyAddress}
                                             onChange={(e) => {
                                                 setEditData({
                                                     ...editData,
-                                                    invoiceGST: e.target.value
+                                                    invoiceCompanyAddress: e.target.value
+                                                })
+                                            }}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                    ) : (
+                                        <p className="text-gray-500">{invoiceData.invoiceCompanyAddress || invoiceData.companyAddress}</p>
+                                    )}
+
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-900 mb-1">Company GST No.</label>
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={editData.invoiceCompanyGSTNo}
+                                            onChange={(e) => {
+                                                setEditData({
+                                                    ...editData,
+                                                    invoiceCompanyGSTNo: e.target.value
                                                 })
                                             }}
                                             className="w-[180px] px-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                                         />
                                     ) : (
-                                        <p className="text-gray-400 text-sm pb-1">{invoiceData.invoiceGST}</p>
+                                        <p className="text-gray-400 text-sm pb-1">{invoiceData.invoiceCompanyGSTNo || invoiceData.invoiceGST}</p>
                                     )}
 
                                 </div>
@@ -564,26 +626,6 @@ const InvoiceSettings = () => {
                                     <span className="font-medium">Total(Including GST):</span>
                                     <span> ₹{fmt(totals.subtotal)}</span>
                                 </div>
-                                <div className="flex justify-between ">
-                                    <span className="font-medium">Discount:</span>
-                                    {isEditing ? (
-                                        <label className='text-red-500'> <span className='mr-[5px]'>-₹</span>
-                                            <input
-                                                type="text"
-                                                value={discount}
-                                                onChange={(e) => {
-                                                    setDiscount(e.target.value)
-                                                }}
-                                                className="w-[70px] px-2 text-sm border text-red-500 border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                            />
-                                        </label>
-
-                                    ) : (
-                                        // <p className="text-gray-400 text-sm pb-1">{totals.discount.toLocaleString()}</p>
-                                        <span className='text-red-500'>-₹{fmt(discount)}</span>
-                                    )}
-                                </div>
-
                                 <div className="flex justify-between  border-t">
                                     <span className="font-semibold">Amount:</span>
                                     <span className="font-semibold"> ₹{fmt(totals.amount)}</span>
@@ -605,14 +647,14 @@ const InvoiceSettings = () => {
                                 ) : null}
                             </div>
                             <div className='w-[40%]'>
-                                <h3 className="font-bold text-xl">{invoiceData.companyName}</h3>
-                                <p className="text-sm  text-gray-600">{invoiceData.companyAddress}</p>
+                                <h3 className="font-bold text-xl">{invoiceData.invoiceCompanyName || invoiceData.companyName}</h3>
+                                <p className="text-sm  text-gray-600">{invoiceData.invoiceCompanyAddress || invoiceData.companyAddress}</p>
                                 {/* <p className="text-sm text-gray-600">
                                     {invoiceData.companyCity}, {invoiceData.companyState} {invoiceData.companyPincode}
                                 </p> */}
                             </div>
                             <div className='absolute right-1 bottom-0 w-[15%}'>
-                                <p className="text-sm  text-gray-600"><span className='font-bold mr-[5px]'>GST No.:</span>{invoiceData.invoiceGST}</p>
+                                <p className="text-sm  text-gray-600"><span className='font-bold mr-[5px]'>GST No.:</span>{invoiceData.invoiceCompanyGSTNo || invoiceData.invoiceGST}</p>
                             </div>
 
                         </div>
@@ -679,10 +721,6 @@ const InvoiceSettings = () => {
                                     <div className="flex justify-between ">
                                         <span className="font-medium">Total(Including GST):</span>
                                         <span className=''>₹{fmt(totals.subtotal)}</span>
-                                    </div>
-                                    <div className="flex justify-between ">
-                                        <span className="font-medium">Discount:</span>
-                                        <span className='text-red-500'>-₹{fmt(discount)}</span>
                                     </div>
                                     <div className="flex justify-between  border-t ">
                                         <span className="font-semibold">Amount:</span>

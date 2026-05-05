@@ -10,6 +10,7 @@ const BillingInvoices = () => {
   const [invoiceSettings, setInvoiceSettings] = useState(null);
   const [orgData, setOrgData] = useState(null)
   const [invoiceData, setInvoiceData] = useState(null);
+  const [autoDownload, setAutoDownload] = useState(false);
   const user_ID = decodeToken();
   const token = localStorage.getItem("authToken");
   const adminApiBaseUrl = window._CONFIG_.VITE_ADMIN_PROJECT_URL;
@@ -84,9 +85,9 @@ const BillingInvoices = () => {
             <tr className="bg-[#2563eb] text-sm text-white">
               <th className="px-2 py-2">Invoice Id</th>
               <th className="px-2 py-2">Invoice Date</th>
-              <th className="px-2 py-2">Course Name</th>
-              <th className="px-2 py-2">Customer Name</th>
+              <th className="px-2 py-2">Plan</th>
               <th className="px-2 py-2">Status</th>
+              <th className="px-2 py-2">Download</th>
               <th className="px-2 py-2">More</th>
             </tr>
           </thead>
@@ -96,16 +97,33 @@ const BillingInvoices = () => {
                 <td className="px-4 py-3 text-center">{invoice.invoiceId?.replace(/\s+/g, "")}</td>
                 <td className="px-4 py-3 text-center">{formattedDate(invoice.invoiceDate)}</td>
                 <td className="px-4 py-3">
-                  {Array.isArray(invoice.courses) && invoice.courses.length === 1
-                    ? invoice.courses[0]?.courseName
-                    : "Multiple courses"}
+                  {invoice?.itemName
+                    ? invoice.itemName
+                    : Array.isArray(invoice.courses) && invoice.courses.length === 1
+                      ? invoice.courses[0]?.courseName
+                      : "—"}
                 </td>
-                <td className="px-4 py-3">{invoice.users?.userName ?? "—"}</td>
                 <td className="px-4 py-3 text-center">{invoice.payment?.status ?? "—"}</td>
                 <td className="px-4 py-3 text-center">
                   <button
                     type="button"
-                    onClick={() => setInvoiceData(invoice)}
+                    onClick={() => {
+                      setAutoDownload(true);
+                      setInvoiceData(invoice);
+                    }}
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50"
+                    title="Download"
+                  >
+                    <i className="ri-download-2-line text-lg" />
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAutoDownload(false);
+                      setInvoiceData(invoice);
+                    }}
                     className="bg-green-500 text-white py-1 px-3 rounded-lg hover:bg-green-700"
                   >
                     View Details
@@ -121,7 +139,11 @@ const BillingInvoices = () => {
           invoice={invoiceData}
           orgData={orgData}
           invoiceSettings={invoiceSettings}
-          onClose={() => setInvoiceData(null)}
+          autoDownload={autoDownload}
+          onClose={() => {
+            setInvoiceData(null);
+            setAutoDownload(false);
+          }}
         />
       )}
     </div>

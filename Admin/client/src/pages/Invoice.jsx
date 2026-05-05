@@ -1,12 +1,9 @@
-import api from '@/lib/api';
-import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import html2pdf from 'html2pdf.js';
 
-const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
+const Invoice = ({ invoice, onClose, orgData, autoDownload = false }) => {
 
   const baseUrl = window._CONFIG_.VITE_API_BASE_URL;
-  const AdminbaseUrl = window._CONFIG_.VITE_ADMIN_BASE_URL;
 
   const timestamp = invoice.invoiceDate;
 
@@ -14,12 +11,25 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
   const [y, m, d] = date.split('-');
   const formattedDate = `${d}/${m}/${y}`;
 
-  const [discount, setDiscount] = useState(invoice.invoiceDiscount);
   const [taxRate, setTaxRate] = useState(invoice.invoiceTaxRate);
 
+  const formatDurationDays = (days) => {
+    const dNum = Number(days);
+    if (!Number.isFinite(dNum) || dNum < 1) return "—";
+    return `${dNum} day${dNum === 1 ? "" : "s"}`;
+  };
+
+  const unitPrice = Number(invoice?.itemUnitPrice ?? 0);
+  const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : 0;
+  const safeTaxRate = Number.isFinite(Number(taxRate)) ? Number(taxRate) : 0;
+  const taxAmount = Math.round((safeUnitPrice * safeTaxRate) / 100);
+  const totalIncludingTax = safeUnitPrice + taxAmount;
+  const amountPaid = Math.round(Number(invoice?.payment?.amount ?? 0) / 100);
+  const amountToShow = Number.isFinite(amountPaid) && amountPaid > 0 ? amountPaid : totalIncludingTax;
+
   const [invoiceData, setInvoiceData] = useState({
-    companyName: orgData?.orgName,
-    companyAddress: orgData?.orgAddress,
+    companyName: invoice?.sellerCompanyName || orgData?.orgName,
+    companyAddress: invoice?.sellerCompanyAddress || orgData?.orgAddress,
 
     billToName: invoice.payment.user.userName,
     billToPhone: invoice.payment.user.mobileNo,
@@ -27,53 +37,28 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
     billToCity: invoice.payment.user.city,
     billToPincode: invoice.payment.user.postalCode,
 
-    invoiceGST: "",
+    invoiceGST: invoice?.sellerCompanyGSTNo || "",
     invoiceId: invoice.invoiceId?.replace(/\s+/g, ""),
     invoiceDate: formattedDate,
   });
-
-  const getInvoiceData = async () => {
-    try {
-      const response = await api.get(`/invoiceSettings/getInvoiceValues`);
-      setInvoiceData(prev => ({
-        ...prev,
-        invoiceGST: response.data.invoiceGST || prev.invoiceGST,
-      }));
-    } catch (error) {
-      console.error('Error Fetching from API:', error);
-    }
-  };
-
-  useEffect(() => {
-    getInvoiceData();
-  }, []);
 
   useEffect(() => {
     if (orgData) {
       setInvoiceData(prev => ({
         ...prev,
-        companyName: orgData?.orgName,
-        companyAddress: orgData?.orgAddress,
+        companyName: invoice?.sellerCompanyName || orgData?.orgName,
+        companyAddress: invoice?.sellerCompanyAddress || orgData?.orgAddress,
+        invoiceGST: invoice?.sellerCompanyGSTNo || prev.invoiceGST,
       }));
     }
-  }, [orgData]);
+  }, [orgData, invoice]);
 
-  const calculateTotals = () => {
-    const total = 10;
-    const taxAmount = (total * taxRate) / 100;
-    const subtotal = Math.floor(total + taxAmount);
-
-    return {
-      total,
-      taxAmount,
-      subtotal,
-      discount: Math.floor(discount),
-      amount: subtotal - discount
-    };
+  const totals = {
+    total: safeUnitPrice,
+    taxAmount,
+    subtotal: totalIncludingTax,
+    amount: amountToShow,
   };
-
-
-  const totals = calculateTotals();
 
   const downloadInvoice = () => {
     const element = document.getElementById('invoice');
@@ -147,27 +132,39 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
       });
   };
 
+  useEffect(() => {
+    if (!autoDownload) return
+    const t = setTimeout(() => {
+      try {
+        downloadInvoice()
+      } finally {
+        onClose?.()
+      }
+    }, 250)
+    return () => clearTimeout(t)
+  }, [autoDownload]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="p-6 fixed top-0 left-0 h-full w-full inset-0 flex justify-center items-center bg-black bg-opacity-90 text-black">
-      <div className="bg-white mt-4 h-screen overflow-y-auto py-5 w-[60%]">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-
-          {/* Top Actions */}
-          <div className='relative flex mb-6'>
-            <button
-              onClick={downloadInvoice}
-              className="px-4 py-2 bg-orange-500 text-white rounded-md"
-            >
-              Download Invoice
-            </button>
-
-            <button
-              onClick={onClose}
-              className='absolute right-0 top-0 bg-red-500 text-white p-3 rounded-full'
-            >
-              ✕
-            </button>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 text-black">
+      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          <button
+            type="button"
+            onClick={downloadInvoice}
+            className="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+          >
+            Download Invoice
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-red-500 px-3 py-2 text-sm font-semibold text-white hover:bg-red-600"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="max-h-[85vh] overflow-y-auto p-6">
 
           {/* Invoice Body */}
           <div className="border rounded-lg p-6 bg-gray-50 text-black" id="invoice">
@@ -183,7 +180,7 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
 
               <div className='w-[40%] text-left'>
                 <img
-                  src={`${baseUrl}/${orgData?.orgLogo}`}
+                  src={`${baseUrl}/${(invoice?.sellerCompanyLogoPath || orgData?.orgLogo || "").replace(/^\/+/, "")}`}
                   alt="Company Logo"
                   className="w-32 h-32 object-contain mb-2"
                 />
@@ -237,7 +234,7 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="py-3 px-4 text-sm font-semibold text-black border">Course Name</th>
+                  <th className="py-3 px-4 text-sm font-semibold text-black border">Plan</th>
                   <th className="py-3 px-4 text-sm font-semibold text-black border">Duration</th>
                   <th className="py-3 px-4 text-sm font-semibold text-black border">Unit price</th>
                 </tr>
@@ -245,9 +242,12 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
 
               <tbody>
                 <tr className="bg-gray-50">
-                  <td className="py-2 px-4 text-sm border">Item</td>
-                  <td className="py-2 px-4 text-sm border">12 days</td>
-                  <td className="py-2 px-4 text-sm border">₹10</td>
+                  <td className="py-2 px-4 text-sm border">{invoice?.itemName || "Subscription"}</td>
+                  <td className="py-2 px-4 text-sm border">
+                    {invoice?.itemDurationDays != null ? formatDurationDays(invoice.itemDurationDays) : "—"}
+                    {invoice?.itemStorageLimitMb != null ? ` · ${invoice.itemStorageLimitMb} MB` : ""}
+                  </td>
+                  <td className="py-2 px-4 text-sm border">₹{totals.total.toLocaleString()}</td>
                 </tr>
               </tbody>
             </table>
@@ -269,13 +269,6 @@ const Invoice = ({ invoice, onClose, orgData, invoiceSettings }) => {
                 <div className="flex justify-between">
                   <span className="font-medium">Total (Including GST):</span>
                   <span>₹{totals.subtotal.toLocaleString()}</span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="font-medium">Discount:</span>
-                  <span className='text-red-600'>
-                    -₹{discount.toLocaleString()}
-                  </span>
                 </div>
 
                 <div className="flex justify-between border-t pt-2">

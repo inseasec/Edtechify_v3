@@ -31,6 +31,9 @@ public class Payment {
 	private String paymentId;
 	
 	private LocalDateTime createdOn;
+
+	// If present, this payment was for a subscription plan checkout (not course purchase).
+	private Long subscriptionPlanId;
 	
 	@ManyToOne
 	@JoinColumn(name = "user_id")
@@ -101,6 +104,14 @@ public class Payment {
 
 	public void setUser(Users user) {
 		this.user = user;
+	}
+
+	public Long getSubscriptionPlanId() {
+		return subscriptionPlanId;
+	}
+
+	public void setSubscriptionPlanId(Long subscriptionPlanId) {
+		this.subscriptionPlanId = subscriptionPlanId;
 	}
 
 	// public Courses getCourses() {

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   Check,
-  KeyRound,
+  CalendarDays,
   RotateCcw,
   ToggleLeft,
   ToggleRight,
@@ -82,7 +82,11 @@ function usingPlatformTrialCaps(row) {
 
 function isTrialPlanRow(row) {
   const sub = String(row.subscription ?? '').trim()
-  return !sub || sub.toLowerCase() === 'trial'
+  if (!sub) return true
+  const s = sub.toLowerCase()
+  // Treat trial-like statuses as trial so expiry editing stays available.
+  // Examples: "Trial", "trial_expired", "Trial expired", etc.
+  return s === 'trial' || s.startsWith('trial_') || s.startsWith('trial ') || s.startsWith('trial-')
 }
 
 function pad2(n) {
@@ -178,7 +182,6 @@ export default function AdminStudents() {
       setRows(
         list.map((r) => ({
           ...r,
-          frozen: r.frozen ?? r.freeze ?? false,
           portalAccessStatus: r.portalAccessStatus ?? 'ACTIVE',
         })),
       )
@@ -256,7 +259,6 @@ export default function AdminStudents() {
     if (!r || typeof r !== 'object') return r
     return {
       ...r,
-      frozen: r.frozen ?? r.freeze ?? false,
       portalAccessStatus: r.portalAccessStatus ?? 'ACTIVE',
     }
   }, [])
@@ -500,17 +502,20 @@ export default function AdminStudents() {
     }
   }
 
-  const toggleUserFreeze = async (userId, currentFrozen) => {
+  const togglePortalLiveStatus = async (userId, nextYes) => {
     try {
-      await api.put(`/users/admin/toggle-freeze/${userId}`)
+      const desired = nextYes ? 'YES' : 'NO'
+      await api.put(`/clients/user/${userId}/portal-live-status`, { portalLiveStatus: desired })
       setRows((prev) =>
         prev.map((r) =>
-          (r.userId ?? r.id) === userId ? { ...r, frozen: !currentFrozen } : r,
+          (r.userId ?? r.id) === userId ? { ...r, portalAccessStatus: desired } : r,
         ),
       )
     } catch (err) {
       console.error(err)
-      showErrorToast(err?.response?.data?.message || 'Could not update freeze status')
+      const msg = getApiErrorMessage(err)
+      const code = err?.response?.status
+      showErrorToast(code ? `Could not update live status (${code}): ${msg}` : `Could not update live status: ${msg}`)
     }
   }
 
@@ -617,82 +622,73 @@ export default function AdminStudents() {
         {loading ? (
           <div className="p-4 text-center text-gray-600">Loading…</div>
         ) : (
-          <table className="w-full min-w-[860px] table-fixed border-collapse">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse">
             <colgroup>
-              <col style={{ width: '11%' }} />
+              <col style={{ width: '12%' }} />
               <col style={{ width: '10%' }} />
-              <col style={{ width: '14%' }} />
+              <col style={{ width: '12%' }} />
               <col style={{ width: '8%' }} />
               <col style={{ width: '7%' }} />
-              <col style={{ width: '14%' }} />
+              <col style={{ width: '13%' }} />
               <col style={{ width: '13%' }} />
               <col style={{ width: '5%' }} />
               <col style={{ width: '5%' }} />
-              <col style={{ width: '6%' }} />
-              <col style={{ width: '7%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '5%' }} />
             </colgroup>
             <thead className="bg-[#f9fafb] border-b text-gray-600 text-sm">
               <tr>
-                <th className="py-2.5 pl-3 pr-0.5 text-left font-semibold align-bottom min-w-0">
+                <th className="py-2.5 pl-4 pr-3 text-left font-semibold align-bottom min-w-0">
                   Company
                 </th>
-                <th className="py-2.5 pl-0.5 pr-1 text-left font-semibold whitespace-nowrap align-bottom">
+                <th className="py-2.5 pl-3 pr-3 text-left font-semibold whitespace-nowrap align-bottom">
                   Phone
                 </th>
-                <th className="py-2.5 pl-1 pr-0.5 text-left font-semibold align-bottom min-w-0">
+                <th className="py-2.5 pl-3 pr-3 text-left font-semibold align-bottom min-w-0">
                   Contact
                 </th>
                 <th
-                  className="py-2.5 pl-0.5 pr-2 text-left font-semibold whitespace-nowrap align-bottom"
+                  className="py-2.5 pl-3 pr-3 text-left font-semibold whitespace-nowrap align-bottom"
                   title="Approximate time live: shows days through 30, then months (30-day shorthand, e.g. 1.2 months), then years (365-day shorthand). Based on portal launch anchor vs today."
                 >
                   Live Since
                 </th>
                 <th
-                  className="py-2.5 px-2 text-left font-semibold whitespace-nowrap align-bottom"
+                  className="py-2.5 px-3 text-left font-semibold whitespace-nowrap align-bottom"
                   title="Storage used on this portal"
                 >
                   Storage
                 </th>
                 <th
-                  className="py-2.5 pl-2 pr-2 text-left font-semibold align-bottom min-w-0"
-                  title="Trial plans: inclusive last calendar day before expiry (same limit as counting days from launch anchor). Paid: —."
+                  className="py-2.5 pl-3 pr-3 text-left font-semibold align-bottom min-w-0"
+                  title="Inclusive last calendar day of access (trial or subscription)."
                 >
                   Expires
                 </th>
                 <th
-                  className="py-2.5 pl-2 pr-1 text-left font-semibold whitespace-nowrap align-bottom border-l border-gray-200"
+                  className="py-2.5 pl-6 pr-3 text-left font-semibold whitespace-nowrap align-bottom border-l border-gray-200"
                   title="Trial storage cap (MB). Save applies expiry + MB together for trials; MB only semantics for paid portals."
                 >
-                  MB limit
+                  Data
                 </th>
                 <th
-                  className="py-2.5 px-0.5 text-center font-semibold"
+                  className="py-2.5 px-2 text-center font-semibold"
                   title="Contact, email & portal URLs"
                 >
                   <Info className="h-5 w-5 mx-auto text-gray-500" aria-hidden />
                   <span className="sr-only">Details</span>
                 </th>
                 <th
-                  className="py-2.5 px-0.5 text-center font-semibold"
-                  title="Change password"
-                >
-                  <KeyRound className="h-5 w-5 mx-auto text-gray-500" aria-hidden />
-                  <span className="sr-only">Password</span>
-                </th>
-                <th
-                  className="py-2.5 px-1 text-center font-semibold whitespace-nowrap"
-                  title={
-                    'Trial elapsed (portal launch date vs default trial days): shows Expired. Otherwise: toggle freezes sign-in.'
-                  }
-                >
-                  Active
-                </th>
-                <th
-                  className="py-2.5 pr-3 pl-1 text-left font-semibold whitespace-nowrap"
-                  title="Subscription plan"
+                  className="py-2.5 pl-3 pr-6 text-left font-semibold whitespace-nowrap"
+                  title="Plan status (trial/subscription/expired)"
                 >
                   Plan
+                </th>
+                <th
+                  className="py-2.5 pl-6 pr-4 text-center font-semibold whitespace-nowrap border-l border-gray-200"
+                  title="Portal live status (YES/NO)"
+                >
+                  Live
                 </th>
               </tr>
             </thead>
@@ -701,8 +697,8 @@ export default function AdminStudents() {
                 const uid = row.userId ?? row.user_id ?? row.id
                 const uidKey = String(uid)
                 const phone = row.portalPhone || row.mobileNo
-                const trialExpired =
-                  row.portalLaunched && String(row.portalAccessStatus ?? '').toUpperCase() === 'TRIAL_EXPIRED'
+                // Superseded by date-based `expiredByDate` and planLabel logic.
+                // Keep portalAccessStatus for future enforcement/metrics if needed.
                 const effD = effectiveTrialDays(row, savedTrialDefaults)
                 const effM = effectiveTrialMb(row, savedTrialDefaults)
                 const isTrial = isTrialPlanRow(row)
@@ -712,7 +708,7 @@ export default function AdminStudents() {
                 const limitDraft = limitDraftByUserId[uidKey]
                 const expiryIso = isTrial
                   ? limitDraft?.expiryIso ?? baseEndIso
-                  : null
+                  : row.trialExpiresOn ?? (anchorIso ? trialInclusiveEndIso(anchorIso, effD) : null)
                 const mbStr = limitDraft?.mb ?? String(effM)
                 const pm = parseInt(String(mbStr).trim(), 10)
                 let pdComputed = effD
@@ -733,13 +729,29 @@ export default function AdminStudents() {
                     pdComputed >= 1 &&
                     pdComputed <= 3650
                   )
+                const today = new Date()
+                today.setHours(0, 0, 0, 0)
+                const expiredByDate = !!(endDt && endDt.getTime() < today.getTime())
+                const planLabel = row.portalLaunched
+                  ? expiredByDate
+                    ? isTrial
+                      ? 'Trial_expired'
+                      : 'subscription_expired'
+                    : isTrial
+                      ? 'Trial'
+                      : String(row.subscription || '').trim() || 'Subscription'
+                  : '—'
+                const pas = String(row.portalAccessStatus ?? '').trim().toUpperCase()
+                const liveYes = pas === 'YES' || pas === 'ACTIVE' || pas === 'TRUE'
+                const liveEffective = row.portalLaunched ? liveYes : false
                 const limitParsesOk =
                   trialExpiryValid &&
                   Number.isFinite(pm) &&
                   pm >= 1 &&
                   pm <= 1_000_000
-                const limitsDirty =
-                  limitParsesOk && (pdComputed !== effD || pm !== effM)
+                const expiryDirty = limitParsesOk && isTrial && pdComputed !== effD
+                const mbDirty = limitParsesOk && pm !== effM
+                const limitsDirty = expiryDirty || mbDirty
                 const platformCaps = usingPlatformTrialCaps(row)
                 return (
                   <tr key={uid} className="border-b border-gray-100 hover:bg-gray-50">
@@ -753,7 +765,7 @@ export default function AdminStudents() {
                       {phone || '—'}
                     </td>
                     <td
-                      className="py-2.5 pl-1 pr-0.5 align-middle min-w-0 whitespace-normal break-words text-gray-900"
+                      className="py-2.5 pl-1 pr-0.5 align-middle min-w-0 truncate text-gray-900"
                       title={row.contactPersonName || undefined}
                     >
                       {row.contactPersonName || '—'}
@@ -772,7 +784,9 @@ export default function AdminStudents() {
                       {row.portalLaunched ? formatBytes(row.storageUsedBytes ?? 0) : '—'}
                     </td>
                     <td
-                      className="py-2.5 pl-2 pr-2 align-middle min-w-0 overflow-hidden"
+                      className={`py-2.5 pl-2 pr-4 align-middle min-w-0 ${
+                        expiryEditingKey === uidKey ? 'overflow-visible' : 'overflow-hidden'
+                      }`}
                       title={
                         isTrial && anchorIso
                           ? `Trial start (anchor date): ${formatExpiryDisplay(
@@ -786,23 +800,25 @@ export default function AdminStudents() {
                           <div className="flex h-9 flex-nowrap items-center gap-1.5">
                             {expiryEditingKey === uidKey ? (
                               <>
-                                <input
-                                  type="date"
-                                  autoFocus
-                                  min={anchorIso ?? undefined}
-                                  max={
-                                    anchorIso
-                                      ? trialInclusiveEndIso(anchorIso, 3650) ?? undefined
-                                      : undefined
-                                  }
-                                  disabled={limitSavingUid === uid || !anchorIso}
-                                  className="h-8 max-w-[9.25rem] shrink-0 rounded border border-gray-200 px-1 text-sm text-gray-900 shadow-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-300 disabled:bg-gray-100"
-                                  value={expiryIso ?? ''}
-                                  onChange={(e) =>
-                                    patchLimitDraft(uidKey, row, { expiryIso: e.target.value })
-                                  }
-                                  aria-label={`Trial expiry (last inclusive day) for ${row.companyName || 'client'}`}
-                                />
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                  <input
+                                    type="date"
+                                    autoFocus
+                                    min={anchorIso ?? undefined}
+                                    max={
+                                      anchorIso
+                                        ? trialInclusiveEndIso(anchorIso, 3650) ?? undefined
+                                        : undefined
+                                    }
+                                    disabled={limitSavingUid === uid}
+                                    className="h-8 w-[7.25rem] shrink-0 rounded border border-gray-200 px-2 text-sm text-gray-900 shadow-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-300 disabled:bg-gray-100"
+                                    value={expiryIso ?? ''}
+                                    onChange={(e) =>
+                                      patchLimitDraft(uidKey, row, { expiryIso: e.target.value })
+                                    }
+                                    aria-label={`Trial expiry (last inclusive day) for ${row.companyName || 'client'}`}
+                                  />
+                                </div>
                                 <span
                                   className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                                     platformCaps ? 'bg-emerald-500' : 'bg-amber-500'
@@ -814,22 +830,6 @@ export default function AdminStudents() {
                                   }
                                   aria-hidden
                                 />
-                                {limitsDirty && limitParsesOk ? (
-                                  <button
-                                    type="button"
-                                    disabled={limitSavingUid === uid}
-                                    onClick={() => saveClientTrialLimits(row)}
-                                    className="inline-flex h-8 shrink-0 items-center justify-center rounded border border-sky-600 bg-sky-600 px-2 text-white hover:bg-sky-700 disabled:bg-gray-300 disabled:border-gray-300 disabled:text-gray-600"
-                                    title="Save expiry and MB limit"
-                                    aria-label="Save trial limits"
-                                  >
-                                    {limitSavingUid === uid ? (
-                                      <span className="text-[10px]">…</span>
-                                    ) : (
-                                      <Check className="h-4 w-4" aria-hidden strokeWidth={2.5} />
-                                    )}
-                                  </button>
-                                ) : null}
                                 {!platformCaps && limitSavingUid !== uid ? (
                                   <button
                                     type="button"
@@ -846,13 +846,14 @@ export default function AdminStudents() {
                               <>
                                 <button
                                   type="button"
-                                  disabled={limitSavingUid === uid || !anchorIso}
+                                  disabled={limitSavingUid === uid}
                                   onClick={() => setExpiryEditingKey(uidKey)}
-                                  className="inline-flex shrink-0 items-center gap-1.5 rounded border border-transparent px-1.5 py-1 text-left font-normal text-gray-900 outline-none hover:border-gray-200 hover:bg-gray-50 focus-visible:border-sky-400 focus-visible:ring-1 focus-visible:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
-                                  title="Click to change trial expiry date"
+                                  className="relative inline-flex h-8 w-[8.25rem] shrink-0 items-center rounded border border-gray-200 bg-white pl-2 pr-8 text-left text-sm tabular-nums text-gray-900 shadow-sm outline-none hover:bg-gray-50 focus-visible:border-sky-400 focus-visible:ring-1 focus-visible:ring-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                  title="Click to change expiry date"
                                 >
-                                  <span className="whitespace-nowrap tabular-nums">
-                                    {formatExpiryDisplay(expiryIso)}
+                                  <span className="truncate">{formatExpiryDisplay(expiryIso)}</span>
+                                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <CalendarDays className="h-4 w-4" aria-hidden />
                                   </span>
                                 </button>
                                 <span
@@ -866,22 +867,6 @@ export default function AdminStudents() {
                                   }
                                   aria-hidden
                                 />
-                                {limitsDirty && limitParsesOk ? (
-                                  <button
-                                    type="button"
-                                    disabled={limitSavingUid === uid}
-                                    onClick={() => saveClientTrialLimits(row)}
-                                    className="inline-flex h-8 shrink-0 items-center justify-center rounded border border-sky-600 bg-sky-600 px-2 text-white hover:bg-sky-700 disabled:bg-gray-300 disabled:border-gray-300 disabled:text-gray-600"
-                                    title="Save expiry and MB limit"
-                                    aria-label="Save trial limits"
-                                  >
-                                    {limitSavingUid === uid ? (
-                                      <span className="text-[10px]">…</span>
-                                    ) : (
-                                      <Check className="h-4 w-4" aria-hidden strokeWidth={2.5} />
-                                    )}
-                                  </button>
-                                ) : null}
                                 {!platformCaps && limitSavingUid !== uid ? (
                                   <button
                                     type="button"
@@ -897,13 +882,15 @@ export default function AdminStudents() {
                             )}
                           </div>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="whitespace-nowrap tabular-nums text-gray-900">
+                            {formatExpiryDisplay(expiryIso)}
+                          </span>
                         )
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="py-2.5 pl-2 pr-1 align-middle min-w-0 overflow-hidden border-l border-gray-100">
+                    <td className="py-2.5 pl-4 pr-2 align-middle min-w-0 overflow-hidden border-l border-gray-200">
                       {row.portalLaunched ? (
                         <div className="flex h-9 flex-nowrap items-center gap-1">
                           <input
@@ -911,35 +898,39 @@ export default function AdminStudents() {
                             min={1}
                             max={1000000}
                             disabled={limitSavingUid === uid}
-                            className="h-8 w-[4.25rem] rounded border border-gray-200 px-1.5 text-base tabular-nums text-gray-900 shadow-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-300 disabled:bg-gray-100"
+                            className="h-8 w-[3.75rem] rounded border border-gray-200 px-1.5 text-base tabular-nums text-gray-900 shadow-sm outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-300 disabled:bg-gray-100"
                             value={mbStr}
                             onChange={(e) => patchLimitDraft(uidKey, row, { mb: e.target.value })}
                             aria-label={`Storage limit MB for ${row.companyName || 'client'}`}
                           />
                           <span className="shrink-0 text-sm tabular-nums text-gray-600">MB</span>
-                          {!isTrial && limitsDirty && limitParsesOk ? (
+                          {limitsDirty && limitParsesOk ? (
                             <button
                               type="button"
                               disabled={limitSavingUid === uid}
                               onClick={() => saveClientTrialLimits(row)}
-                              className="inline-flex h-8 shrink-0 items-center justify-center rounded border border-sky-600 bg-sky-600 px-2 text-white hover:bg-sky-700 disabled:bg-gray-300 disabled:border-gray-300 disabled:text-gray-600"
-                              title="Save MB limit"
-                              aria-label="Save storage limit"
+                              className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-sky-600 bg-sky-600 px-2.5 text-white shadow-sm hover:bg-sky-700 disabled:bg-gray-300 disabled:border-gray-300 disabled:text-gray-600"
+                              title={isTrial ? 'Save expiry and MB limit' : 'Save MB limit'}
+                              aria-label={isTrial ? 'Save trial limits' : 'Save storage limit'}
                             >
                               {limitSavingUid === uid ? (
                                 <span className="text-[10px]">…</span>
                               ) : (
-                                <Check className="h-4 w-4" aria-hidden strokeWidth={2.5} />
+                                <Check className="h-5 w-5" aria-hidden strokeWidth={2.5} />
                               )}
                             </button>
                           ) : null}
-                          {!isTrial && !platformCaps && limitSavingUid !== uid ? (
+                          {!platformCaps && limitSavingUid !== uid ? (
                             <button
                               type="button"
                               onClick={() => revertClientTrialLimitsToPlatform(row)}
                               className="inline-flex h-8 shrink-0 items-center justify-center rounded border border-transparent px-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                              title="Use platform default storage cap"
-                              aria-label="Revert storage limit"
+                              title={
+                                isTrial
+                                  ? 'Use platform defaults (expiry from default duration + MB)'
+                                  : 'Use platform default storage cap'
+                              }
+                              aria-label={isTrial ? 'Revert to platform default trial limits' : 'Revert storage limit'}
                             >
                               <RotateCcw className="h-4 w-4" aria-hidden strokeWidth={2} />
                             </button>
@@ -959,56 +950,48 @@ export default function AdminStudents() {
                         <Info className="h-5 w-5" />
                       </button>
                     </td>
-                    <td className="py-2.5 px-0.5 text-center align-middle">
-                      <button
-                        type="button"
-                        className="text-gray-600 hover:text-blue-600 p-0.5 inline-flex"
-                        onClick={() => {
-                          setSelectedUser(row)
-                          setForm({ newPassword: '', confirmPassword: '' })
-                          setShowPasswordModal(true)
-                        }}
-                        aria-label="Change password"
-                      >
-                        <KeyRound className="h-5 w-5" />
-                      </button>
-                    </td>
-                    <td className="py-2.5 px-1 text-center align-middle">
-                      {trialExpired ? (
-                        <span
-                          className="inline-block rounded-md px-2 py-1 text-xs font-normal uppercase tracking-wide text-gray-700 bg-gray-100"
-                          title="Trial elapsed since portal launch (clients.portal_access_status). Portal lock-out is a separate future step."
-                        >
-                          Expired
-                        </span>
+                    <td className="py-2.5 pr-12 pl-2 align-middle whitespace-nowrap">
+                      {row.portalLaunched ? (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-block whitespace-nowrap rounded-md px-2 py-1 font-normal ${
+                              planLabel.endsWith('expired')
+                                ? 'bg-gray-100 text-gray-700'
+                                : isTrial
+                                  ? 'bg-sky-100 text-sky-900'
+                                  : 'bg-amber-100 text-amber-900'
+                            }`}
+                            title={planLabel}
+                          >
+                            {planLabel}
+                          </span>
+                        </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => toggleUserFreeze(uid, row.frozen)}
-                          className="inline-flex items-center justify-center p-0.5"
-                          title={
-                            row.frozen
-                              ? 'Frozen — click to activate account'
-                              : 'Active — click to freeze account'
-                          }
-                          aria-label={row.frozen ? 'Unfreeze user' : 'Freeze user'}
-                        >
-                          {row.frozen ? (
-                            <ToggleRight className="h-8 w-8 text-red-600 shrink-0" />
-                          ) : (
-                            <ToggleLeft className="h-8 w-8 text-green-600 shrink-0" />
-                          )}
-                        </button>
+                        <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="py-2.5 pr-3 pl-2 align-middle whitespace-nowrap">
+                    <td className="py-2.5 pl-12 pr-3 text-center align-middle border-l border-gray-100">
                       {row.portalLaunched ? (
-                        <span
-                          className="inline-block max-w-full truncate rounded-md px-2 py-1 font-normal bg-amber-100 text-amber-900"
-                          title={row.subscription || 'Trial'}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextYes = !liveEffective
+                            if (nextYes && expiredByDate) {
+                              showErrorToast('Cannot set Live = YES for an expired portal. Extend expiry date first.')
+                              return
+                            }
+                            togglePortalLiveStatus(uid, nextYes)
+                          }}
+                          className="inline-flex items-center justify-center p-0.5"
+                          title={liveEffective ? 'Live (YES) — click to disable' : 'Not live (NO) — click to enable'}
+                          aria-label={liveEffective ? 'Set portal live status to NO' : 'Set portal live status to YES'}
                         >
-                          {row.subscription || 'Trial'}
-                        </span>
+                          {liveEffective && !expiredByDate ? (
+                            <ToggleLeft className="h-8 w-8 text-green-600 shrink-0" />
+                          ) : (
+                            <ToggleRight className="h-8 w-8 text-red-600 shrink-0" />
+                          )}
+                        </button>
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}
@@ -1161,8 +1144,19 @@ export default function AdminStudents() {
             </dl>
             <button
               type="button"
+              onClick={() => {
+                setSelectedUser(detailRow)
+                setForm({ newPassword: '', confirmPassword: '' })
+                setShowPasswordModal(true)
+              }}
+              className="mt-6 w-full py-2 rounded-lg bg-sky-600 text-white font-semibold hover:bg-sky-700"
+            >
+              Change password
+            </button>
+            <button
+              type="button"
               onClick={() => setDetailRow(null)}
-              className="mt-6 w-full py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200"
+              className="mt-3 w-full py-2 rounded-lg bg-gray-100 text-gray-800 font-medium hover:bg-gray-200"
             >
               Close
             </button>

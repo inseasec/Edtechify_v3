@@ -3,8 +3,11 @@ import { Link } from "react-router-dom";
 
 /**
  * Major offering callout: subscription = learner portal + admin portal (not a single “feature tile”).
+ * @param {{ previewMode?: boolean, offeringsIntro?: string }} props
  */
-export default function HomeTwoPortalsOffering() {
+export default function HomeTwoPortalsOffering({ previewMode = false, offeringsIntro = "" }) {
+  const introTrim = typeof offeringsIntro === "string" ? offeringsIntro.trim() : "";
+
   return (
     <section
       id="two-portals"
@@ -32,9 +35,15 @@ export default function HomeTwoPortalsOffering() {
             Two portals — not a patchwork of apps
           </h2>
           <p className="mx-auto mt-3 max-w-3xl text-center text-sm leading-relaxed text-slate-300 sm:text-base">
-            When you subscribe to Edukify, you receive a{" "}
-            <span className="font-semibold text-white">complete, branded product</span>: a portal for
-            learners and families, and a separate portal for your staff.
+            {introTrim ? (
+              <span className="whitespace-pre-line">{introTrim}</span>
+            ) : (
+              <>
+                When you subscribe to Edukify, you receive a{" "}
+                <span className="font-semibold text-white">complete, branded product</span>: a portal for
+                learners and families, and a separate portal for your staff.
+              </>
+            )}
           </p>
 
           <div className="mt-8 grid gap-6 lg:mt-10 lg:grid-cols-2 lg:gap-8">
@@ -104,18 +113,31 @@ export default function HomeTwoPortalsOffering() {
           </div>
 
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-5">
-            <Link
-              to="/platform"
-              className="inline-flex items-center justify-center rounded-full bg-sky-500 px-8 py-3.5 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-900/30 transition hover:bg-sky-400"
-            >
-              How the two portals fit together
-            </Link>
-            <Link
-              to="/signup"
-              className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/12"
-            >
-              Get started
-            </Link>
+            {previewMode ? (
+              <>
+                <span className="inline-flex cursor-default items-center justify-center rounded-full bg-sky-500 px-8 py-3.5 text-sm font-semibold text-slate-950 opacity-95 shadow-lg shadow-sky-900/30">
+                  How the two portals fit together
+                </span>
+                <span className="inline-flex cursor-default items-center justify-center rounded-full border border-white/30 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white opacity-95 backdrop-blur-sm">
+                  Get started
+                </span>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/platform"
+                  className="inline-flex items-center justify-center rounded-full bg-sky-500 px-8 py-3.5 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-900/30 transition hover:bg-sky-400"
+                >
+                  How the two portals fit together
+                </Link>
+                <Link
+                  to="/signup"
+                  className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/12"
+                >
+                  Get started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

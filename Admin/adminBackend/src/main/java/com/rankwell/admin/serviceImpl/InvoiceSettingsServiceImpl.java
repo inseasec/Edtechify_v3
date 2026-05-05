@@ -32,14 +32,20 @@ public class InvoiceSettingsServiceImpl implements InvoiceSettingsService{
             existingInvoiceSettings.setInvoicePrefix(invoiceSettings.getInvoicePrefix());
             existingInvoiceSettings.setInvoiceYear(invoiceSettings.getInvoiceYear());
             existingInvoiceSettings.setInvoiceSuffix(invoiceSettings.getInvoiceSuffix());
-            existingInvoiceSettings.setInvoiceDiscount(invoiceSettings.getInvoiceDiscount());
+            // Discount removed from global invoice settings; keep it always 0.
+            existingInvoiceSettings.setInvoiceDiscount(0L);
             existingInvoiceSettings.setInvoiceTaxRate(invoiceSettings.getInvoiceTaxRate());
             existingInvoiceSettings.setInvoiceGST(invoiceSettings.getInvoiceGST());
+			existingInvoiceSettings.setInvoiceCompanyName(invoiceSettings.getInvoiceCompanyName());
+			existingInvoiceSettings.setInvoiceCompanyAddress(invoiceSettings.getInvoiceCompanyAddress());
+			existingInvoiceSettings.setInvoiceCompanyLogoPath(invoiceSettings.getInvoiceCompanyLogoPath());
+			existingInvoiceSettings.setInvoiceCompanyGSTNo(invoiceSettings.getInvoiceCompanyGSTNo());
 
             return invoiceSettingsRepository.save(existingInvoiceSettings);
         }
 
         // Save new config
+        invoiceSettings.setInvoiceDiscount(0L);
         return invoiceSettingsRepository.save(invoiceSettings);
     }
 

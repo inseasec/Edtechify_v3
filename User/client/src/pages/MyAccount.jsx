@@ -9,6 +9,7 @@ import TermAndCondition from "../Components/TermAndCondition";
 import BillingInvoices from "../Components/BillingInvoices";
 import ConfirmPaymentPage from "../Components/ConfirmPaymentPage";
 import LaunchEdtechPlatform from "../Components/LaunchEdtechPlatform";
+import SubscriptionPlanPicker from "../Components/SubscriptionPlanPicker";
 
 function MyAccount() {
   const { component } = useParams();
@@ -60,6 +61,8 @@ function MyAccount() {
         return <BillingInvoices />;
       case "buynow":
         return <ConfirmPaymentPage />;
+      case "upgrade-plans":
+        return <SubscriptionPlanPicker />;
       case "launch":
         return <LaunchEdtechPlatform onPortalPresenceChange={handlePortalPresenceChange} />;
       default:

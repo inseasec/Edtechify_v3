@@ -1,8 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import api from "../api";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
-import { decodeToken } from "../authConfig"
+import { decodeToken } from "../authConfig";
+
+function formatPlanDurationDays(days) {
+  const d = Number(days);
+  if (!Number.isFinite(d) || d < 1) return "—";
+  if (d % 365 === 0) {
+    const y = d / 365;
+    return `${y} year${y === 1 ? "" : "s"}`;
+  }
+  if (d % 30 === 0) {
+    const m = d / 30;
+    return `${m} month${m === 1 ? "" : "s"}`;
+  }
+  return `${d} days`;
+}
 
 /** Backend returns Razorpay order as `order.toString()` → Axios often gives a JSON string, so `.id` is missing until parsed. */
 function parseCreateOrderPayload(data) {
@@ -24,6 +38,15 @@ function parseCreateOrderPayload(data) {
 
 export default function ConfirmPaymentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const subscriptionPlan = useMemo(() => {
+    const st = location.state;
+    if (st?.checkoutKind === "subscription" && st?.plan?.id != null) {
+      return st.plan;
+    }
+    return null;
+  }, [location.state]);
 
   // Static demo data (replace with API later)
   const course = useMemo(
@@ -47,7 +70,7 @@ export default function ConfirmPaymentPage() {
   });
 
   const [config, setConfig] = useState({});
-  const [discount, setDiscount] = useState(2);
+  const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(4);
   const [msg, setMsg] = useState("");
 
@@ -60,7 +83,6 @@ export default function ConfirmPaymentPage() {
     try {
       const response = await api.get("/invoice/getInvoiceSettings");
       const d = response.data || {};
-      if (typeof d.invoice_discount === "number") setDiscount(d.invoice_discount);
       if (typeof d.invoice_tax_rate === "number") setTaxRate(d.invoice_tax_rate);
     } catch (error) {
       // keep static fallback
@@ -81,27 +103,27 @@ export default function ConfirmPaymentPage() {
 
   
 
-  const calculateTotals = () => {
-    const total = Number(course.price);
+  const totals = useMemo(() => {
+    const base = subscriptionPlan ? Number(subscriptionPlan.price) : Number(course.price);
+    const total = Number.isFinite(base) ? base : 0;
     const taxAmount = (total * taxRate) / 100;
     const subtotal = Math.floor(total + taxAmount);
-
     return {
       total,
       taxAmount,
       subtotal,
-      discount: Math.floor(discount),
-      amount: subtotal - discount
+      discount: 0,
+      amount: subtotal,
     };
-  };
+  }, [subscriptionPlan, course.price, taxRate, discount]);
 
-  const totals = calculateTotals();
   const userId = decodeToken(); // static userId for demo; backend may ignore/override with token
-  const createOrder = async (amount, courseId) => {
+  const createOrder = async (amount, courseIds) => {
     const paymentInfoPayload = {
-      amountStr: amount,
+      amountStr: String(Math.max(0, Math.round(Number(amount)))),
       userId,
-      courseId: [courseId],
+      courseId: Array.isArray(courseIds) ? courseIds : [courseIds],
+      subscriptionPlanId: subscriptionPlan?.id ?? null,
     };
     try {
       const res = await api.post("/payment/createOrder", paymentInfoPayload);
@@ -111,7 +133,7 @@ export default function ConfirmPaymentPage() {
           showErrorToast(error);
           return;
         }
-        openRazorpayCheckout(order);
+        openRazorpayCheckout(order, subscriptionPlan);
       }
     } catch (err) {
       console.error("Order creation failed:", err);
@@ -119,7 +141,7 @@ export default function ConfirmPaymentPage() {
     }
 
   };
-  const openRazorpayCheckout = (order) => {
+  const openRazorpayCheckout = (order, plan) => {
     if (!window?.Razorpay) {
       showErrorToast("Razorpay script not loaded. Refresh the page.");
       return;
@@ -131,12 +153,16 @@ export default function ConfirmPaymentPage() {
       return;
     }
 
+    const description = plan?.name
+      ? `Subscription: ${plan.name}`
+      : "Course Purchase";
+
     const options = {
       key,
       amount: Math.max(0, Number(totals.amount) || 0) * 100, // paise
       currency: "INR",
       name: "Rankwell",
-      description: "Course Purchase",
+      description,
       image: "/logo.png",
       order_id: order?.id,
       handler: function (response) {
@@ -231,19 +257,49 @@ export default function ConfirmPaymentPage() {
         <div className="bg-white shadow-2xl rounded-3xl border border-gray-200 p-7 relative overflow-hidden">
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500 opacity-20 rounded-full blur-3xl"></div>
 
+          {subscriptionPlan ? (
+            <p className="mb-4 text-right text-xs">
+              <Link
+                to="/account/upgrade-plans"
+                className="font-semibold text-sky-600 underline-offset-2 hover:text-sky-800 hover:underline"
+              >
+                Change plan
+              </Link>
+            </p>
+          ) : null}
+
           <div className="flex gap-4 items-center pb-5 border-b">
             <div className="w-20 h-20 rounded-xl bg-slate-200 shadow-md flex items-center justify-center">
-              <i className="ri-book-2-line text-3xl text-slate-500" />
+              <i
+                className={`text-3xl text-slate-500 ${subscriptionPlan ? "ri-vip-crown-line" : "ri-book-2-line"}`}
+              />
             </div>
             <div className="min-w-0">
-              <h3 className="font-semibold text-gray-800 leading-snug truncate">
-                {course.courseName}
-              </h3>
-              <p className="text-sm text-gray-500 capitalize">
-                {course.courseType === "Complete Course" ? "📚" : "📝"} {course.courseType}
-              </p>
-              <p className="text-xs text-gray-400">• {course.deptName}</p>
-              <p className="text-xs text-gray-500 mt-1">⏱ {course.duration}</p>
+              {subscriptionPlan ? (
+                <>
+                  <h3 className="font-semibold text-gray-800 leading-snug truncate">
+                    {subscriptionPlan.name}
+                  </h3>
+                  <p className="text-sm text-gray-500">Edtech portal subscription</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {formatPlanDurationDays(subscriptionPlan.durationDays)} ·{" "}
+                    {subscriptionPlan.storageLimitMb != null
+                      ? `${subscriptionPlan.storageLimitMb} MB storage`
+                      : ""}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-semibold text-gray-800 leading-snug truncate">
+                    {course.courseName}
+                  </h3>
+                  <p className="text-sm text-gray-500 capitalize">
+                    {course.courseType === "Complete Course" ? "📚" : "📝"} {course.courseType}
+                  </p>
+                  <p className="text-xs text-gray-400">• {course.deptName}</p>
+                  <p className="text-xs text-gray-500 mt-1">⏱ {course.duration}</p>
+                </>
+              )}
             </div>
           </div>
 
@@ -263,11 +319,6 @@ export default function ConfirmPaymentPage() {
               <span>₹{totals.subtotal}</span>
             </div>
 
-            <div className="flex justify-between text-red-500">
-              <span>Discount</span>
-              <span>-₹{discount}</span>
-            </div>
-
             <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl px-4 py-4 flex justify-between items-center">
               <span className="text-gray-700 font-semibold">Amount</span>
               <span className="text-2xl font-bold text-blue-700">₹{totals.amount}</span>
@@ -275,12 +326,16 @@ export default function ConfirmPaymentPage() {
           </div>
 
           <p className="text-xs text-gray-500 text-center mt-5 leading-relaxed">
-            Static course data + real Razorpay flow (config/order/verify).
+            {subscriptionPlan
+              ? "Subscription checkout uses your selected plan amount with the same Razorpay flow."
+              : "Static course data + real Razorpay flow (config/order/verify)."}
           </p>
 
           <button
             type="button"
-            onClick={() => createOrder(totals.amount, course.id)}
+            onClick={() =>
+              createOrder(totals.amount, subscriptionPlan ? [] : [course.id])
+            }
             disabled={totals.amount <= 0}
             className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3.5 rounded-xl font-semibold shadow-lg transition-all duration-300 disabled:opacity-50"
           >

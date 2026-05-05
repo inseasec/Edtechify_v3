@@ -209,14 +209,6 @@ export default function Navbar() {
           </nav>
 
           <div className="flex shrink-0 items-center gap-2 lg:gap-3">
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-600 transition hover:bg-sky-100"
-              aria-label="Wishlist"
-            >
-              <i className="ri-heart-2-fill text-lg" />
-            </button>
-
             <div className="relative">
               {isLoggedIn ? (
                 <ProfileAvatar containerRef={desktopAccountRef} />

@@ -29,7 +29,7 @@ public class ClientPortalRowDto {
 	private Long storageUsedBytes;
 
 	/**
-	 * {@code ACTIVE} | {@code TRIAL_EXPIRED} — persisted on {@code clients.portal_access_status}.
+	 * Persisted on {@code clients.portal_live_status} as {@code YES}/{@code NO}.
 	 */
 	private String portalAccessStatus;
 
@@ -46,6 +46,9 @@ public class ClientPortalRowDto {
 	 * Used with {@link #effectiveTrialLimitDays} to show/edit trial end date on the admin grid.
 	 */
 	private String trialAnchorDate;
+
+	/** Inclusive last calendar day of access (yyyy-MM-dd). Used for both Trial and paid plans. */
+	private String trialExpiresOn;
 
 	public Long getUserId() {
 		return userId;
@@ -229,5 +232,13 @@ public class ClientPortalRowDto {
 
 	public void setTrialAnchorDate(String trialAnchorDate) {
 		this.trialAnchorDate = trialAnchorDate;
+	}
+
+	public String getTrialExpiresOn() {
+		return trialExpiresOn;
+	}
+
+	public void setTrialExpiresOn(String trialExpiresOn) {
+		this.trialExpiresOn = trialExpiresOn;
 	}
 }
