@@ -7,6 +7,8 @@ public class OrgDirectorDetailDTO {
     private String role;
     private String aboutDirector;
     private String directorImage;
+    private String socialUrl;
+    private java.util.List<String> ownerImages;
     
 	public Long getId() {
 		return id;
@@ -47,6 +49,22 @@ public class OrgDirectorDetailDTO {
 	public void setDirectorImage(String directorImage) {
 		this.directorImage = directorImage;
 	}
+
+    public String getSocialUrl() {
+        return socialUrl;
+    }
+
+    public void setSocialUrl(String socialUrl) {
+        this.socialUrl = socialUrl;
+    }
+
+    public java.util.List<String> getOwnerImages() {
+        return ownerImages;
+    }
+
+    public void setOwnerImages(java.util.List<String> ownerImages) {
+        this.ownerImages = ownerImages;
+    }
 
 	public OrgDirectorDetailDTO() {
 		super();

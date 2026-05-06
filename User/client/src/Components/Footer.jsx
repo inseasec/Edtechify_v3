@@ -49,10 +49,28 @@ export default function Footer() {
         <div className="w-full md:mt-10 text-center md:text-start md:w-[21%]">
           <h3 className="text-2xl md:text-3xl">Contact Us</h3>
 
-          <p className="mt-3 text-sm">
-            <i className="ri-map-pin-fill h-2 text-center text-sm"> </i>
-            {organisation.orgAddress}
-          </p>
+          {Array.isArray(organisation.orgAddresses) && organisation.orgAddresses.length ? (
+            <div className="mt-3 space-y-1 text-sm">
+              {organisation.orgAddresses.map((row, idx) => (
+                <div key={idx} className="flex items-start gap-2 text-sm">
+                  <i className="ri-map-pin-fill mt-0.5 h-2 text-center text-sm"> </i>
+                  <div>
+                    {row?.label ? (
+                      <div className="font-semibold">{row.label}</div>
+                    ) : null}
+                    <div className="whitespace-pre-line leading-relaxed">
+                      {row?.address ?? row}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm">
+              <i className="ri-map-pin-fill h-2 text-center text-sm"> </i>
+              {organisation.orgAddress}
+            </p>
+          )}
 
           <div className="flex mt-4 text-sm justify-center md:justify-start space-x-1">
             <i className="ri-phone-fill text-sm "></i>

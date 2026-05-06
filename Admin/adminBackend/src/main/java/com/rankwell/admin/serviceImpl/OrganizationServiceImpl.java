@@ -2,6 +2,9 @@ package com.rankwell.admin.serviceImpl;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +21,7 @@ import com.rankwell.admin.entity.OrgAchievement;
 import com.rankwell.admin.entity.OrgDirectorDetail;
 import com.rankwell.admin.entity.OrgGallery;
 import com.rankwell.admin.entity.OrgTeamGallery;
+import com.rankwell.admin.entity.OrgParentCompany;
 import com.rankwell.admin.entity.OrganizationDetail;
 import com.rankwell.admin.repository.OrganizationRepository;
 import com.rankwell.admin.services.FileStorageService;
@@ -49,6 +53,8 @@ import com.rankwell.admin.dto.HeadingRequest;
 //import com.rankwell.admin.entity.CourseDepartmentType;
 //import com.rankwell.admin.dto.CourseMetaDto;
 import com.rankwell.admin.dto.TermsAndConditionsDto;
+import com.rankwell.admin.entity.OrgAddressEntry;
+import com.rankwell.admin.dto.OrgAddressDTO;
 
  
 @Service
@@ -92,6 +98,35 @@ public class OrganizationServiceImpl implements OrganizationService {
         this.pathResolver = pathResolver;
     }
 
+    private static List<OrgAddressEntry> normalizeAddresses(List<OrgAddressDTO> raw, String fallbackSingle) {
+        List<OrgAddressEntry> out = new ArrayList<>();
+        if (raw != null) {
+            for (OrgAddressDTO a : raw) {
+                if (a == null) continue;
+                String label = a.getLabel() == null ? null : a.getLabel().trim();
+                String addr = a.getAddress() == null ? null : a.getAddress().trim();
+                if (addr == null || addr.isEmpty()) continue;
+                if (label != null && label.isEmpty()) label = null;
+                out.add(new OrgAddressEntry(label, addr));
+            }
+        }
+        if (out.isEmpty() && fallbackSingle != null && !fallbackSingle.trim().isEmpty()) {
+            out.add(new OrgAddressEntry(null, fallbackSingle.trim()));
+        }
+        return out;
+    }
+
+    private static String primaryAddressFrom(List<OrgAddressEntry> addresses, String fallbackSingle) {
+        if (addresses != null) {
+            for (OrgAddressEntry a : addresses) {
+                String addr = a == null ? null : a.getAddress();
+                if (addr != null && !addr.trim().isEmpty()) return addr.trim();
+            }
+        }
+        if (fallbackSingle != null && !fallbackSingle.trim().isEmpty()) return fallbackSingle.trim();
+        return null;
+    }
+
 @Override
 public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<MultipartFile> courseVideos,MultipartFile bannerVideo,MultipartFile logo,
                                                 MultipartFile wallpaper, MultipartFile directorImage,
@@ -100,7 +135,9 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
 
       OrganizationDetail org = new OrganizationDetail();
       org.setOrgName(dto.getOrgName()); 
-      org.setOrgAddress(dto.getOrgAddress()); 
+      List<OrgAddressEntry> addrs = normalizeAddresses(dto.getOrgAddresses(), dto.getOrgAddress());
+      org.setOrgAddresses(addrs);
+      org.setOrgAddress(primaryAddressFrom(addrs, dto.getOrgAddress()));
       org.setOrgPhone(dto.getOrgPhone());
       org.setOrgEmail(dto.getOrgEmail()); 
 
@@ -230,13 +267,24 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
                  director.setDirectorName(dto.getOrgDirectorDetail().getDirectorName());
                  director.setRole(dto.getOrgDirectorDetail().getRole());
                  director.setAboutDirector(dto.getOrgDirectorDetail().getAboutDirector());
+                 director.setSocialUrl(dto.getOrgDirectorDetail().getSocialUrl());
 
              if (directorImage != null && !directorImage.isEmpty()){
                  director.setDirectorImage(
-                    saveFile(directorImage, Module.ABOUT_US, MediaType.IMAGE,"Director_Image", 1));
+                    saveFile(directorImage, Module.ABOUT_US, MediaType.IMAGE, "Director_Image_" + java.util.UUID.randomUUID(), 1));
                  }
                director.setOrganization(org);
                org.setOrgDirectorDetail(director);
+           }
+
+           // PARENT COMPANY
+           if (dto.getOrgParentCompany() != null) {
+               OrgParentCompany pc = new OrgParentCompany();
+               pc.setName(dto.getOrgParentCompany().getName());
+               pc.setWebsiteUrl(dto.getOrgParentCompany().getWebsiteUrl());
+               pc.setDescription(dto.getOrgParentCompany().getDescription());
+               pc.setOrganization(org);
+               org.setOrgParentCompany(pc);
            }
 
            // ACHIEVEMENTS
@@ -271,7 +319,9 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
 
           //========== BASIC DETAILS ===//
           org.setOrgName(dto.getOrgName());
-          org.setOrgAddress(dto.getOrgAddress());
+          List<OrgAddressEntry> addrs = normalizeAddresses(dto.getOrgAddresses(), dto.getOrgAddress());
+          org.setOrgAddresses(addrs);
+          org.setOrgAddress(primaryAddressFrom(addrs, dto.getOrgAddress()));
           org.setOrgPhone(dto.getOrgPhone());
           org.setOrgEmail(dto.getOrgEmail());
 
@@ -425,6 +475,7 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
     director.setDirectorName(dto.getOrgDirectorDetail().getDirectorName());
     director.setRole(dto.getOrgDirectorDetail().getRole());
     director.setAboutDirector(dto.getOrgDirectorDetail().getAboutDirector());
+    director.setSocialUrl(dto.getOrgDirectorDetail().getSocialUrl());
 
     //  IMAGE UPDATE LOGIC //
     if (directorImage != null && !directorImage.isEmpty()) {
@@ -435,12 +486,25 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
           }
 
         //  Save new image
-          String newImagePath = saveFile(directorImage, Module.ABOUT_US, MediaType.IMAGE,"Director_Image", 1);
+          String newImagePath = saveFile(directorImage, Module.ABOUT_US, MediaType.IMAGE, "Director_Image_" + java.util.UUID.randomUUID(), 1);
 
         //  Update DB path
         director.setDirectorImage(newImagePath);
     }
 }
+
+    // ============ PARENT COMPANY ============//
+    if (dto.getOrgParentCompany() != null) {
+        OrgParentCompany pc = org.getOrgParentCompany();
+        if (pc == null) {
+            pc = new OrgParentCompany();
+            pc.setOrganization(org);
+            org.setOrgParentCompany(pc);
+        }
+        pc.setName(dto.getOrgParentCompany().getName());
+        pc.setWebsiteUrl(dto.getOrgParentCompany().getWebsiteUrl());
+        pc.setDescription(dto.getOrgParentCompany().getDescription());
+    }
                                  
     //========= ACHIEVEMENTS ==========//
     if (dto.getOrgAchievement() != null) {
@@ -501,7 +565,32 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
          OrganizationDetail organization = organizationRepository
                                         .findFirstByOrderByIdAsc()
                                         .orElseThrow(() -> new RuntimeException("No organization details found!"));
-                return modelMapper.map(organization, OrganizationDetailDto.class);
+                OrganizationDetailDto dto = modelMapper.map(organization, OrganizationDetailDto.class);
+                try {
+                    // ModelMapper may not map ElementCollection reliably; map addresses manually.
+                    List<OrgAddressDTO> addressDtos = new ArrayList<>();
+                    if (organization.getOrgAddresses() != null) {
+                        for (OrgAddressEntry a : organization.getOrgAddresses()) {
+                            if (a == null) continue;
+                            addressDtos.add(new OrgAddressDTO(a.getLabel(), a.getAddress()));
+                        }
+                    }
+                    dto.setOrgAddresses(addressDtos);
+                    if (dto.getOrgAddress() == null || dto.getOrgAddress().trim().isEmpty()) {
+                        dto.setOrgAddress(primaryAddressFrom(organization.getOrgAddresses(), organization.getOrgAddress()));
+                    }
+                } catch (Exception ignore) {
+                }
+                // Ensure ElementCollection fields are present even if model mapper skips them.
+                try {
+                    if (dto.getOrgDirectorDetail() != null && organization.getOrgDirectorDetail() != null) {
+                        dto.getOrgDirectorDetail().setOwnerImages(organization.getOrgDirectorDetail().getOwnerImages());
+                        dto.getOrgDirectorDetail().setSocialUrl(organization.getOrgDirectorDetail().getSocialUrl());
+                    }
+                } catch (Exception ignore) {
+                    // fallback: never fail details endpoint due to mapper quirks
+                }
+                return dto;
            }
 
  public void addGalleryImage(Long orgId, MultipartFile image) throws IOException {
@@ -619,6 +708,67 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
 		teamGallery.getTeamImages().remove(imagePath);
 		organizationRepository.save(org);
 	}
+
+    @Override
+    @Transactional
+    public void addOwnerImage(Long orgId, MultipartFile image) throws IOException {
+        OrganizationDetail org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+
+        OrgDirectorDetail director = org.getOrgDirectorDetail();
+        if (director == null) {
+            director = new OrgDirectorDetail();
+            director.setOrganization(org);
+            org.setOrgDirectorDetail(director);
+        }
+        if (director.getOwnerImages() == null) {
+            director.setOwnerImages(new ArrayList<>());
+        }
+
+        String path = saveFile(image, Module.OWNER, MediaType.IMAGE, "Owner_Image_" + UUID.randomUUID(), 1);
+        director.getOwnerImages().add(path);
+        // make newly uploaded image active by default
+        director.setDirectorImage(path);
+
+        organizationRepository.save(org);
+    }
+
+    @Override
+    @Transactional
+    public void deleteOwnerImage(Long orgId, String imagePath) {
+        OrganizationDetail org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+
+        OrgDirectorDetail director = org.getOrgDirectorDetail();
+        if (director == null || director.getOwnerImages() == null) return;
+
+        deleteFile(imagePath);
+        director.getOwnerImages().remove(imagePath);
+
+        // If deleting the active image, pick the latest remaining (or clear)
+        if (imagePath != null && imagePath.equals(director.getDirectorImage())) {
+            String next = director.getOwnerImages().isEmpty() ? null : director.getOwnerImages().get(director.getOwnerImages().size() - 1);
+            director.setDirectorImage(next);
+        }
+        organizationRepository.save(org);
+    }
+
+    @Override
+    @Transactional
+    public void selectOwnerImage(Long orgId, String imagePath) {
+        OrganizationDetail org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+
+        OrgDirectorDetail director = org.getOrgDirectorDetail();
+        if (director == null) throw new RuntimeException("Owner details not found");
+        List<String> imgs = director.getOwnerImages();
+        if (imgs == null || imgs.isEmpty()) throw new RuntimeException("No owner images found");
+        if (imagePath == null || imagePath.trim().isEmpty()) throw new RuntimeException("imagePath is required");
+        if (!imgs.contains(imagePath)) throw new RuntimeException("Selected image does not belong to this organization");
+
+        director.setDirectorImage(imagePath);
+        organizationRepository.save(org);
+    }
 
  public void addAchievementImage(Long orgId, MultipartFile image) throws IOException{
 
@@ -752,15 +902,54 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
             String extension = "";
 
             if (originalName != null && originalName.contains(".")) {
-                extension = originalName.substring(originalName.lastIndexOf("."));
+                extension = originalName.substring(originalName.lastIndexOf(".")).toLowerCase();
             }
 
             // Clean base name
             baseName = baseName.replaceAll("\\s+", "_")
                             .replaceAll("[^a-zA-Z0-9_-]", "");
 
-            String filename = baseName + "_" + serialNumber + extension;
+            boolean looksLikeHeif = ".heic".equals(extension) || ".heif".equals(extension) || ".avif".equals(extension);
 
+            // Try to decode any image and re-encode to a web-friendly format.
+            // If decoding fails (plugin not installed / unsupported), we fall back to saving the original bytes.
+            if (type == MediaType.IMAGE) {
+                try (InputStream in = file.getInputStream()) {
+                    BufferedImage img = ImageIO.read(in);
+                    if (img == null && looksLikeHeif) {
+                        throw new RuntimeException("HEIC/HEIF image decoding is not available on this server. Please install libheif (required for HEIC support) or upload JPG/PNG/WEBP.");
+                    }
+                    if (img != null) {
+                        boolean hasAlpha = img.getColorModel() != null && img.getColorModel().hasAlpha();
+                        String outExt = hasAlpha ? ".png" : ".jpg";
+                        // For HEIC/HEIF/AVIF always normalize to jpg/png so browsers can render it.
+                        if (!looksLikeHeif && (".png".equals(extension) || ".jpg".equals(extension) || ".jpeg".equals(extension) || ".webp".equals(extension) || ".gif".equals(extension))) {
+                            // keep original extension for common web formats (except normalize jpeg->jpg)
+                            if (".jpeg".equals(extension)) outExt = ".jpg";
+                            else outExt = extension;
+                        }
+
+                        String filename = baseName + "_" + serialNumber + outExt;
+                        File destination = new File(dir, filename);
+                        String writerFormat = outExt.startsWith(".") ? outExt.substring(1) : outExt;
+                        if ("jpg".equalsIgnoreCase(writerFormat) || "jpeg".equalsIgnoreCase(writerFormat)) writerFormat = "jpg";
+                        boolean wrote = ImageIO.write(img, writerFormat, destination);
+                        if (wrote) {
+                            return relativePath + "/" + filename;
+                        }
+                        // If ImageIO can't write this format, fall back to raw transfer below.
+                    }
+                } catch (Exception ignore) {
+                    if (looksLikeHeif) {
+                        // Do not silently store HEIC bytes (browser can't display it); fail loudly.
+                        if (ignore instanceof RuntimeException) throw (RuntimeException) ignore;
+                        throw new RuntimeException("Failed to process HEIC/HEIF image. Ensure libheif is installed on the server, then retry.", ignore);
+                    }
+                    // fall back to raw transfer below for other image formats
+                }
+            }
+
+            String filename = baseName + "_" + serialNumber + extension;
             File destination = new File(dir, filename);
             file.transferTo(destination);
             return relativePath + "/" + filename;
@@ -1026,13 +1215,44 @@ public String saveTemplateFile(MultipartFile file, Module module, MediaType type
         extension = originalName.substring(originalName.lastIndexOf(".")).toLowerCase();
     }
 
-    // Unique filename
-    String fileName = filePrefix + java.util.UUID.randomUUID() + extension;
+    boolean looksLikeHeif = ".heic".equals(extension) || ".heif".equals(extension) || ".avif".equals(extension);
 
+    if (type == MediaType.IMAGE) {
+        try (InputStream in = file.getInputStream()) {
+            BufferedImage img = ImageIO.read(in);
+            if (img == null && looksLikeHeif) {
+                throw new RuntimeException("HEIC/HEIF image decoding is not available on this server. Please install libheif (required for HEIC support) or upload JPG/PNG/WEBP.");
+            }
+            if (img != null) {
+                boolean hasAlpha = img.getColorModel() != null && img.getColorModel().hasAlpha();
+                String outExt = hasAlpha ? ".png" : ".jpg";
+                if (!looksLikeHeif && (".png".equals(extension) || ".jpg".equals(extension) || ".jpeg".equals(extension) || ".webp".equals(extension) || ".gif".equals(extension))) {
+                    if (".jpeg".equals(extension)) outExt = ".jpg";
+                    else outExt = extension;
+                }
+
+                String fileName = filePrefix + java.util.UUID.randomUUID() + outExt;
+                File destination = new File(dir, fileName);
+                String writerFormat = outExt.startsWith(".") ? outExt.substring(1) : outExt;
+                if ("jpeg".equalsIgnoreCase(writerFormat)) writerFormat = "jpg";
+                boolean wrote = ImageIO.write(img, writerFormat, destination);
+                if (wrote) {
+                    return relativePath + "/" + fileName;
+                }
+            }
+        } catch (Exception ignore) {
+            if (looksLikeHeif) {
+                if (ignore instanceof RuntimeException) throw (RuntimeException) ignore;
+                throw new RuntimeException("Failed to process HEIC/HEIF image. Ensure libheif is installed on the server, then retry.", ignore);
+            }
+            // fall back to raw transfer below
+        }
+    }
+
+    // fallback: store original bytes
+    String fileName = filePrefix + java.util.UUID.randomUUID() + extension;
     File destination = new File(dir, fileName);
     file.transferTo(destination);
-
-    // Return relative path (perfect for DB storage)
     return relativePath + "/" + fileName;
 }
 

@@ -4,15 +4,19 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.util.Map;
 import java.util.List;
+import com.rankwell.admin.entity.OrgAddressEntry;
 
 
 @Entity
@@ -27,6 +31,10 @@ public class OrganizationDetail {
 	private String orgName;
 	
 	private String orgAddress;
+
+	@ElementCollection(fetch = FetchType.EAGER)
+	@CollectionTable(name = "organization_addresses", joinColumns = @JoinColumn(name = "organization_id"))
+	private List<OrgAddressEntry> orgAddresses;
 	
 	private String orgPhone;
 	
@@ -55,6 +63,10 @@ public class OrganizationDetail {
     @OneToOne(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JsonManagedReference
     private OrgTeamGallery orgTeamGallery;
+
+    @OneToOne(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @JsonManagedReference
+    private OrgParentCompany orgParentCompany;
 
 	@OneToOne(mappedBy = "organization", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     @JsonManagedReference
@@ -93,6 +105,14 @@ public class OrganizationDetail {
 
 	public void setOrgAddress(String orgAddress) {
 		this.orgAddress = orgAddress;
+	}
+
+	public List<OrgAddressEntry> getOrgAddresses() {
+		return orgAddresses;
+	}
+
+	public void setOrgAddresses(List<OrgAddressEntry> orgAddresses) {
+		this.orgAddresses = orgAddresses;
 	}
 
 	public String getOrgPhone() {
@@ -159,6 +179,14 @@ public class OrganizationDetail {
 	public void setOrgTeamGallery(OrgTeamGallery orgTeamGallery) {
 		this.orgTeamGallery = orgTeamGallery;
 	}
+
+    public OrgParentCompany getOrgParentCompany() {
+        return orgParentCompany;
+    }
+
+    public void setOrgParentCompany(OrgParentCompany orgParentCompany) {
+        this.orgParentCompany = orgParentCompany;
+    }
 
 	public OrganizationDetail() {
 		super();

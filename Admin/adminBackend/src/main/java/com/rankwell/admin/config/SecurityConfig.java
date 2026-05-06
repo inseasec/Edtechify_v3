@@ -67,6 +67,9 @@ public class SecurityConfig {
           .authorizeHttpRequests(auth -> auth
 				// Public org details are used by the user-site (footer/pages).
 				.requestMatchers("/organizations/details").permitAll()
+				// Admin UI saves org branding/content via multipart; keep open in dev.
+				// If you want to lock this down later, switch to hasAuthority("ROLE_SUPER_ADMIN") etc.
+				.requestMatchers("/organizations/addUpdateDetails").permitAll()
 				.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 				.requestMatchers("/admin/login", "/admin/verify-otp", "/admin/password/otp/send", "/admin/password/reset")
 				.permitAll()
@@ -100,8 +103,8 @@ public class SecurityConfig {
 						"ROLE_HR","ROLE_SUPER_ADMIN","ROLE_TEAM_ADMIN","ROLE_SUB_ADMIN")
 				.requestMatchers( "/careers/getAllOfHr").hasAnyAuthority(
 						"ROLE_HR","ROLE_SUPER_ADMIN","ROLE_TEAM_ADMIN","ROLE_SUB_ADMIN")
-				.requestMatchers( "/organizations/addUpdateDetails").hasAnyAuthority("ROLE_HR","ROLE_SUPER_ADMIN")
-				.requestMatchers( "/organizations/details").hasAnyAuthority("ROLE_HR","ROLE_SUPER_ADMIN")
+				// Kept public above (user site needs this without auth).
+				// .requestMatchers( "/organizations/details").hasAnyAuthority("ROLE_HR","ROLE_SUPER_ADMIN")
 
 //				.requestMatchers("/admin/changePassword").hasAuthority("ROLE_SUPER_ADMIN")
 				.anyRequest().authenticated())

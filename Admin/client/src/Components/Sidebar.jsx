@@ -123,6 +123,7 @@ const Sidebar = () => {
   const userPanelLinks = [
     { to: `${base}/user-panel/home`, label: 'Home' },
     { to: `${base}/user-panel/about`, label: 'About Us' },
+    { to: `${base}/user-panel/my-team`, label: 'My Team' },
   ];
 
   const careerLinks =

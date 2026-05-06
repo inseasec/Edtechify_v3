@@ -19,7 +19,8 @@ import ChatSupport from './pages/ChatSupport'
 import AdminPage from './pages/AdminPage'
 import AdminStudents from './pages/AdminStudents'
 import UserPanelHome from './pages/UserPanelHome'
-import UserPanelAbout from './pages/UserPanelAbout'
+import UserPanelMyTeam from './pages/UserPanelMyTeam'
+import UserPanelAboutV2 from './pages/UserPanelAboutV2'
 import Frontend from './pages/Frontend'
 import AuthenticationProviders from './pages/AuthenticationProviders'
 import AuthenticationKeys from './pages/AuthenticationKeys'
@@ -60,7 +61,8 @@ const adminChildRoutes = (
     <Route path="user-panel" element={<Frontend />}>
       <Route index element={<Navigate to="home" replace />} />
       <Route path="home" element={<UserPanelHome />} />
-      <Route path="about" element={<UserPanelAbout />} />
+      <Route path="my-team" element={<UserPanelMyTeam />} />
+      <Route path="about" element={<UserPanelAboutV2 />} />
       <Route path="authentication" element={<Navigate to="authentication/providers" replace />} />
       <Route path="authentication/providers" element={<AuthenticationProviders />} />
       <Route path="authentication/keys" element={<AuthenticationKeys />} />

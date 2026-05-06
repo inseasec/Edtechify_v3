@@ -27,11 +27,19 @@ export default function Contact() {
 
   const email = (organisation?.orgEmail ?? "").trim();
   const phone = (organisation?.orgPhone ?? "").trim();
-  const address = (organisation?.orgAddress ?? "").trim();
+  const addressRows = Array.isArray(organisation?.orgAddresses)
+    ? organisation.orgAddresses
+    : [];
+  const fallbackAddress = (organisation?.orgAddress ?? "").trim();
   const orgName =
     typeof organisation?.orgName === "string" && organisation.orgName.trim()
       ? organisation.orgName.trim()
       : "Edukify";
+  const parentCompanyName =
+    typeof organisation?.orgParentCompany?.name === "string" &&
+    organisation.orgParentCompany.name.trim()
+      ? organisation.orgParentCompany.name.trim()
+      : "";
 
   const mailto =
     email &&
@@ -51,7 +59,6 @@ export default function Contact() {
 
       <div className="mx-auto grid max-w-5xl gap-10 px-4 py-12 sm:px-6 lg:px-8 lg:grid-cols-2">
         <section className="rounded-2xl border border-sky-100 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-[var(--text-h)]">Organization</h2>
           {!organisation && !loadError ? (
             <p className="mt-4 text-sm text-slate-500">Loading contact details…</p>
           ) : null}
@@ -62,7 +69,7 @@ export default function Contact() {
             </p>
           ) : null}
           {organisation ? (
-            <ul className="mt-6 space-y-4 text-[var(--text)]">
+            <ul className="mt-2 space-y-4 text-[var(--text)]">
               {organisation.orgLogo ? (
                 <li>
                   <img
@@ -72,18 +79,37 @@ export default function Contact() {
                   />
                 </li>
               ) : null}
-              <li>
-                <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Name
-                </span>
-                <span className="text-[var(--text-h)] font-medium">{orgName}</span>
-              </li>
-              {address ? (
+              {parentCompanyName ? (
                 <li>
                   <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Address
+                    Parent company
                   </span>
-                  <span className="whitespace-pre-line">{address}</span>
+                  <span className="text-[var(--text-h)] font-medium">{parentCompanyName}</span>
+                </li>
+              ) : null}
+              {addressRows.length ? (
+                <li>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {addressRows.map((row, idx) => (
+                      <div
+                        key={idx}
+                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                      >
+                        {row?.label ? (
+                          <div className="text-xs font-semibold uppercase tracking-wider text-slate-600">
+                            {row.label}
+                          </div>
+                        ) : null}
+                        <div className="mt-1 whitespace-pre-line leading-relaxed">
+                          {row?.address ?? ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </li>
+              ) : fallbackAddress ? (
+                <li>
+                  <span className="whitespace-pre-line">{fallbackAddress}</span>
                 </li>
               ) : null}
               {phone ? (
@@ -106,7 +132,7 @@ export default function Contact() {
                   </a>
                 </li>
               ) : null}
-              {!address && !phone && !email ? (
+              {!fallbackAddress && !addressRows.length && !phone && !email ? (
                 <li className="text-sm text-slate-500">
                   Add address, phone, and email in <strong>User Panel → Home</strong> (footer
                   section) or organization settings—they sync to this page.

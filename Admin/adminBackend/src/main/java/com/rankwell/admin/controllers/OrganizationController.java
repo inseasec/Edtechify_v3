@@ -323,6 +323,33 @@ public class OrganizationController {
 		return ResponseEntity.ok("Team image deleted successfully");
 	}
 
+    @PostMapping(value = "/owner/add", consumes = {"multipart/form-data"})
+    public ResponseEntity<String> addOwnerImage(@RequestPart("image") MultipartFile image) throws IOException {
+        OrganizationDetail org = organizationRepository
+                .findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+        organizationService.addOwnerImage(org.getId(), image);
+        return ResponseEntity.ok("Owner image added successfully");
+    }
+
+    @DeleteMapping("/owner")
+    public ResponseEntity<String> deleteOwnerImage(@RequestParam("imagePath") String imagePath) {
+        OrganizationDetail org = organizationRepository
+                .findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+        organizationService.deleteOwnerImage(org.getId(), imagePath);
+        return ResponseEntity.ok("Owner image deleted successfully");
+    }
+
+    @PutMapping("/owner/select")
+    public ResponseEntity<String> selectOwnerImage(@RequestParam("imagePath") String imagePath) {
+        OrganizationDetail org = organizationRepository
+                .findFirstByOrderByIdAsc()
+                .orElseThrow(() -> new RuntimeException("Organization not found"));
+        organizationService.selectOwnerImage(org.getId(), imagePath);
+        return ResponseEntity.ok("Owner image selected successfully");
+    }
+
 
 	@PostMapping(value = "/achievement/add", consumes = {"multipart/form-data"})
 	public ResponseEntity<String> addAchievementImage(@RequestPart("image") MultipartFile image) throws IOException {

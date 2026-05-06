@@ -75,6 +75,7 @@ function defaultForm() {
     id: null,
     orgName: '',
     orgAddress: '',
+    orgAddresses: [],
     orgPhone: '',
     orgEmail: '',
     orgLogo: null,
@@ -111,6 +112,11 @@ function defaultForm() {
       aboutDirector: '',
       directorImage: null,
     },
+    orgParentCompany: {
+      name: '',
+      websiteUrl: '',
+      description: '',
+    },
     orgAchievement: {
       achivementTitle: '',
       achivementImages: [],
@@ -132,7 +138,26 @@ function mapDetailsToForm(raw) {
   const next = defaultForm()
   next.id = d.id ?? null
   next.orgName = d.orgName ?? ''
-  next.orgAddress = d.orgAddress ?? ''
+  const rawAddrList = Array.isArray(d.orgAddresses) ? d.orgAddresses : []
+  // Support both formats:
+  // - old: ["addr1", "addr2"]
+  // - new: [{ label, address }]
+  const normalized = rawAddrList
+    .map((a) => {
+      if (typeof a === 'string') return { label: '', address: a }
+      if (a && typeof a === 'object') return { label: a.label ?? '', address: a.address ?? '' }
+      return null
+    })
+    .filter(Boolean)
+    .filter((a) => String(a.address ?? '').trim() !== '')
+
+  if (normalized.length) {
+    next.orgAddresses = normalized
+    next.orgAddress = normalized[0]?.address ?? d.orgAddress ?? ''
+  } else {
+    next.orgAddress = d.orgAddress ?? ''
+    next.orgAddresses = next.orgAddress ? [{ label: '', address: next.orgAddress }] : [{ label: '', address: '' }]
+  }
   next.orgPhone = d.orgPhone ?? ''
   next.orgEmail = d.orgEmail ?? ''
   next.orgLogo = d.orgLogo ?? null
@@ -152,6 +177,9 @@ function mapDetailsToForm(raw) {
   }
   if (d.orgDirectorDetail) {
     next.orgDirectorDetail = { ...next.orgDirectorDetail, ...d.orgDirectorDetail }
+  }
+  if (d.orgParentCompany) {
+    next.orgParentCompany = { ...next.orgParentCompany, ...d.orgParentCompany }
   }
   if (d.orgAchievement) {
     next.orgAchievement = {
@@ -313,7 +341,11 @@ export default function Frontend() {
     }
   }, [buildOrganizationJson, fetchAllData, files])
 
-  const pageLabel = location.pathname.includes('about') ? 'ABOUT PAGE' : 'HOME PAGE'
+  const pageLabel = location.pathname.includes('my-team')
+    ? 'MY TEAM'
+    : location.pathname.includes('about')
+      ? 'ABOUT US'
+      : 'HOME PAGE'
 
   const outletContext = useMemo(
     () => ({
@@ -367,6 +399,14 @@ export default function Frontend() {
               }
             >
               About
+            </NavLink>
+            <NavLink
+              to="my-team"
+              className={({ isActive }) =>
+                `rounded-md px-3 py-1.5 ${isActive ? 'bg-orange-100 text-orange-800' : 'text-slate-600 hover:bg-slate-100'}`
+              }
+            >
+              My Team
             </NavLink>
           </nav>
         </div>

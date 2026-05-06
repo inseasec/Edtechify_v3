@@ -89,6 +89,12 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- HEIC/HEIF/AVIF decoding via ImageIO plugin (requires libheif installed at runtime) -->
+		<dependency>
+			<groupId>com.github.gotson.nightmonkeys</groupId>
+			<artifactId>imageio-heif</artifactId>
+			<version>1.0.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>

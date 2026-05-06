@@ -77,12 +77,10 @@ public class CareersController {
        }
 
       @GetMapping("/getAllArchived")
-      public ResponseEntity<List<Careers>> getAllArchived(){
-        // Frontend careers pipeline expects `Careers` rows.
-        // Treat "archived" as status=ARCHIVED on Careers (same shape as getAllApplicants).
-        List<Careers> archived = careersService.getApplicantByStatus("ARCHIVED");
+      public ResponseEntity<List<ArchivedCareers>> getAllArchived(){
+        List<ArchivedCareers> archived = careerArchiveService.getAllArchived();
         if (archived == null || archived.isEmpty()) {
-          return ResponseEntity.noContent().build();
+            return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(archived);
       }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { NavLink, useOutletContext } from 'react-router-dom'
 import {
   BookOpen,
@@ -47,6 +47,7 @@ export default function UserPanelHome() {
   const ctx = useOutletContext()
   const {
     formData = {},
+    setFormData,
     handleTextChange,
     handleFileChange,
     handleGalleryFiles,
@@ -103,6 +104,25 @@ export default function UserPanelHome() {
     return null
   }, [bannerObjectUrl, files.bannerVideo, formData.orgHome?.bannerVideo, baseUrl])
 
+  const orgAddresses = useMemo(() => {
+    const raw = formData?.orgAddresses
+    if (Array.isArray(raw) && raw.length) return raw
+    if (formData?.orgAddress) return [{ label: '', address: formData.orgAddress }]
+    return [{ label: '', address: '' }]
+  }, [formData?.orgAddresses, formData?.orgAddress])
+
+  const setOrgAddresses = useCallback(
+    (nextAddrs) => {
+      const cleaned = Array.isArray(nextAddrs) ? nextAddrs : []
+      const primary =
+        cleaned.find((a) => String(a?.address ?? '').trim())?.address ??
+        cleaned.find((a) => String(a ?? '').trim())?.address ??
+        ''
+      setFormData?.((prev) => ({ ...prev, orgAddresses: cleaned, orgAddress: primary }))
+    },
+    [setFormData],
+  )
+
   const handleLogoChange = (e) => {
     const file = e.target.files?.[0]
     if (!file || !file.type.startsWith('image/')) return
@@ -152,6 +172,76 @@ export default function UserPanelHome() {
       {!isLoading && (
         <>
           <div className="space-y-6">
+            {/* ===== TOP SUMMARY (Organization + quick actions) ===== */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                    <span className="text-sm font-bold">{String(formData?.orgName ?? 'E').trim().slice(0, 1) || 'E'}</span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Organization</p>
+                    <p className="text-lg font-semibold text-slate-900">{formData?.orgName || '—'}</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Name</p>
+                    <p className="mt-1 text-sm text-slate-800">{formData?.orgName || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Phone</p>
+                    <p className="mt-1 text-sm text-slate-800">{formData?.orgPhone || '—'}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <div className="mt-1 grid grid-cols-1 gap-3 text-sm text-slate-800 sm:grid-cols-2">
+                      {(orgAddresses ?? [])
+                        .filter((r) => String(r?.address ?? '').trim() !== '')
+                        .map((r, idx) => (
+                          <div
+                            key={idx}
+                            className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"
+                          >
+                            {r?.label ? (
+                              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                                {r.label}
+                              </div>
+                            ) : null}
+                            <div className="mt-1 whitespace-pre-line leading-relaxed text-slate-800">
+                              {r?.address}
+                            </div>
+                          </div>
+                        ))}
+                      {!orgAddresses?.some((r) => String(r?.address ?? '').trim()) ? <p>—</p> : null}
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Email</p>
+                    <p className="mt-1 text-sm text-slate-800">{formData?.orgEmail || '—'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Quick actions</p>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <a
+                    href={formData?.orgEmail ? `mailto:${formData.orgEmail}` : undefined}
+                    className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
+                    onClick={(e) => {
+                      if (!formData?.orgEmail) e.preventDefault()
+                    }}
+                  >
+                    Send an email
+                  </a>
+                </div>
+                <p className="mt-4 text-sm text-slate-600">
+                  Contact fields are read from the same organization record as the public site footer—update once in admin, reflected everywhere.
+                </p>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-5 shadow-sm md:px-6">
               <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -365,7 +455,7 @@ export default function UserPanelHome() {
           {/* ===== FOOTER ===== */}
           <div className="bg-gray-900 py-8 text-white">
             <div className="mx-auto max-w-7xl px-6">
-              <div className="grid grid-cols-1 gap-10 md:grid-cols-5">
+              <div className="grid grid-cols-1 gap-10 md:grid-cols-6">
                 <div className="space-y-4">
                   <div className="flex items-center justify-center md:justify-start">
                     {logoPreview ? (
@@ -397,23 +487,86 @@ export default function UserPanelHome() {
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 md:col-span-2">
                   <div className="mb-2 flex items-center gap-4">
                     <h3 className="text-xl font-bold text-white">Contact Us</h3>
                   </div>
                   <div className="space-y-4">
                     <div>
                       <label className="mb-1.5 block text-xs text-gray-400">Address</label>
-                      <div className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5">
-                        <MapPin className="h-5 w-5 shrink-0 text-gray-400" />
-                        <input
-                          type="text"
-                          name="orgAddress"
-                          value={formData.orgAddress ?? ''}
-                          onChange={handleTextChange}
-                          className="w-full bg-transparent text-sm text-white focus:outline-none"
-                          placeholder="Enter address"
-                        />
+                      <div className="space-y-3">
+                        {orgAddresses.map((row, idx) => (
+                          <div
+                            key={idx}
+                            className="rounded-xl border border-gray-700 bg-gray-800/60 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs font-semibold text-gray-200">
+                                {idx === 0 ? 'Primary address' : `Address ${idx + 1}`}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = orgAddresses.filter((_, i) => i !== idx)
+                                  setOrgAddresses(next.length ? next : [{ label: '', address: '' }])
+                                }}
+                                className="rounded-lg border border-gray-700 bg-gray-900/40 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-700"
+                                title="Remove"
+                              >
+                                Remove
+                              </button>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                              <div>
+                                <label className="mb-1 block text-[11px] font-medium text-gray-300">
+                                  Heading (bold)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={row?.label ?? ''}
+                                  onChange={(e) => {
+                                    const next = [...orgAddresses]
+                                    next[idx] = { ...(next[idx] ?? {}), label: e.target.value }
+                                    setOrgAddresses(next)
+                                  }}
+                                  className="w-full rounded-lg border border-gray-700 bg-gray-900/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                                  placeholder="e.g. India Office, Canada Office"
+                                />
+                              </div>
+
+                              <div className="md:col-span-1">
+                                <label className="mb-1 block text-[11px] font-medium text-gray-300">
+                                  Address
+                                </label>
+                                <textarea
+                                  value={row?.address ?? ''}
+                                  onChange={(e) => {
+                                    const next = [...orgAddresses]
+                                    next[idx] = { ...(next[idx] ?? {}), address: e.target.value }
+                                    setOrgAddresses(next)
+                                  }}
+                                  rows={3}
+                                  className="w-full resize-y rounded-lg border border-gray-700 bg-gray-900/40 px-3 py-2 text-sm text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+                                  placeholder="Full address..."
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setOrgAddresses([...orgAddresses, { label: '', address: '' }])}
+                            className="inline-flex w-fit rounded-lg bg-sky-600 px-3 py-2 text-xs font-medium text-white hover:bg-sky-700"
+                          >
+                            Add another address
+                          </button>
+                          <p className="text-[11px] text-gray-400">
+                            First address is treated as primary and used where a single address is shown.
+                          </p>
+                        </div>
                       </div>
                     </div>
                     <div>

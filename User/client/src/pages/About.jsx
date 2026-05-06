@@ -15,7 +15,10 @@ He has been instrumental in shaping Edukify—not only as the initiative’s vis
 const OWNER_INSTAGRAM_URL =
   "https://www.instagram.com/jsbedi95?igsh=MWo4M2E3ZjVsaG93Zg%3D%3D&utm_source=qr";
 
-const SEASEC_WEBSITE_URL = "https://seasec.in/";
+const DEFAULT_PARENT_COMPANY_NAME = "Seasec Pvt Ltd";
+const DEFAULT_PARENT_COMPANY_WEBSITE_URL = "https://seasec.in/";
+const DEFAULT_PARENT_COMPANY_DESCRIPTION =
+  "Seasec Pvt Ltd is the parent company behind Edukify. It carries product strategy, engineering, and long-term investment in the platform so schools, coaching brands, and training businesses get a stable partner—not a one-off project or anonymous vendor. The company focuses on practical software for education and training: secure operations, clear governance, and delivery you can run year after year.";
 
 export default function About() {
   const [organisation, setOrganisation] = useState(null);
@@ -65,6 +68,24 @@ export default function About() {
   const directorRole =
     typeof director?.role === "string" && director.role.trim() ? director.role.trim() : "";
   const directorBio = aboutDirectorCms || DEFAULT_DIRECTOR_BIO;
+  const ownerSocialUrl =
+    typeof director?.socialUrl === "string" && director.socialUrl.trim()
+      ? director.socialUrl.trim()
+      : OWNER_INSTAGRAM_URL;
+
+  const parentCompany = organisation?.orgParentCompany ?? {};
+  const parentCompanyName =
+    typeof parentCompany?.name === "string" && parentCompany.name.trim()
+      ? parentCompany.name.trim()
+      : DEFAULT_PARENT_COMPANY_NAME;
+  const parentCompanyWebsiteUrl =
+    typeof parentCompany?.websiteUrl === "string" && parentCompany.websiteUrl.trim()
+      ? parentCompany.websiteUrl.trim()
+      : DEFAULT_PARENT_COMPANY_WEBSITE_URL;
+  const parentCompanyDescription =
+    typeof parentCompany?.description === "string" && parentCompany.description.trim()
+      ? parentCompany.description.trim()
+      : DEFAULT_PARENT_COMPANY_DESCRIPTION;
 
   const teamGallery = organisation?.orgTeamGallery ?? {};
   const teamRaw = teamGallery.teamImages;
@@ -94,7 +115,7 @@ export default function About() {
           </h1>
           <p className="mt-1.5 max-w-2xl text-xs leading-snug text-slate-500 sm:text-sm">
             <span className="font-medium text-slate-600">Edukify</span> is developed under{" "}
-            <span className="text-slate-700">Seasec Pvt Ltd</span>. Below: the owner, then the parent
+            <span className="text-slate-700">{parentCompanyName}</span>. Below: the owner, then the parent
             company. Below that: optional mission and values, then{" "}
             <span className="font-medium text-slate-600">Our Team</span> at the end—the same photo set
             as the <Link to="/our-team" className="font-medium text-sky-700 hover:underline">Our Team</Link>{" "}
@@ -135,7 +156,7 @@ export default function About() {
                     ) : null}
                   </div>
                   <a
-                    href={OWNER_INSTAGRAM_URL}
+                    href={ownerSocialUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex max-w-full items-center gap-2.5 self-start rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm font-semibold text-sky-800 shadow-sm transition hover:border-sky-300/80 hover:bg-sky-50 hover:text-sky-900 sm:mt-0.5"
@@ -165,7 +186,7 @@ export default function About() {
                       />
                     </div>
                   ) : null}
-                  <div className="min-w-0 flex-1 text-sm leading-relaxed text-slate-600">
+                  <div className="min-w-0 flex-1 text-lg leading-8 text-slate-700">
                     {directorBio.split(/\n\n+/).map((para, i) => (
                       <p key={i} className={i > 0 ? "mt-4" : undefined}>
                         {para.trim()}
@@ -181,10 +202,10 @@ export default function About() {
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
                       Parent company
                     </p>
-                    <h3 className="mt-2 text-lg font-semibold text-slate-900">Seasec Pvt Ltd</h3>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">{parentCompanyName}</h3>
                   </div>
                   <a
-                    href={SEASEC_WEBSITE_URL}
+                    href={parentCompanyWebsiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex max-w-full items-center gap-2.5 self-start rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-sm font-semibold text-sky-800 shadow-sm transition hover:border-sky-300/80 hover:bg-sky-50 hover:text-sky-900 sm:mt-0.5"
@@ -195,65 +216,14 @@ export default function About() {
                     </span>
                   </a>
                 </div>
-                <p className="mt-4 text-sm leading-relaxed text-slate-600">
-                  <strong className="font-semibold text-slate-800">Seasec Pvt Ltd</strong> is the
-                  parent company behind Edukify. It carries product strategy, engineering, and
-                  long-term investment in the platform so schools, coaching brands, and training
-                  businesses get a stable partner—not a one-off project or anonymous vendor. The
-                  company focuses on practical software for education and training: secure operations,
-                  clear governance, and delivery you can run year after year.
+                <p className="mt-4 text-lg leading-8 text-slate-700">
+                  {parentCompanyDescription}
                 </p>
               </div>
             </div>
           </div>
         </div>
       </section>
-
-      {/* Team & workspace — images from admin (org team gallery); full grid on /our-team */}
-      {teamGalleryImages.length > 0 ? (
-        <section className="border-t border-slate-200 bg-slate-50 px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
-          <div className="mx-auto max-w-6xl">
-            <h2 className="font-serif text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
-              Team &amp; workspace
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-snug text-slate-600">
-              Team and office photos from your admin (User Panel → About). Tap to open the full image.
-            </p>
-            <ul className="mt-6 grid list-none grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
-              {teamGalleryImages.map((path) => {
-                const href = orgMediaUrl(path, apiBase);
-                return (
-                  <li key={path} className="min-w-0">
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group block overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm ring-1 ring-slate-200/60 transition hover:border-sky-300/70 hover:shadow-md"
-                    >
-                      <img
-                        src={href}
-                        alt=""
-                        className="aspect-[4/3] h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="mt-8 text-center">
-              <Link
-                to="/our-team"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-sky-700 underline-offset-4 transition hover:text-sky-900 hover:underline"
-              >
-                <i className="ri-group-line text-lg" aria-hidden />
-                View all team photos
-              </Link>
-            </p>
-          </div>
-        </section>
-      ) : null}
 
       {/* Org-owned copy from admin — optional */}
       {hasCmsBody ? (

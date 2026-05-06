@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import api from '@/lib/api'
+import { CAREERS_PATHS } from '@/lib/careersApi'
 import {
   formatAppliedRole,
   formatCareerPipelineStatusForHr,
@@ -156,6 +157,19 @@ export default function ApplicantDetails() {
     }
   }
 
+  const rejectAndArchive = async () => {
+    try {
+      setLoading(true)
+      await api.put(CAREERS_PATHS.archiveApplicant(applicantId))
+      showSuccessToast('Applicant archived successfully')
+      goBackToList()
+    } catch (error) {
+      showErrorToast(error?.response?.data?.message || 'Failed to archive applicant')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   /** HR sees intro video only when opening from the Applied list (not other pipeline tabs). */
   const openedFromApplied = location.state?.from === 'APPLIED'
 
@@ -285,7 +299,7 @@ export default function ApplicantDetails() {
                 Select
               </ActionBtn>
             )}
-            <ActionBtn color="#d23b3b" onClick={() => updateStatus('ARCHIVED')}>
+            <ActionBtn color="#d23b3b" onClick={rejectAndArchive}>
               Reject
             </ActionBtn>
           </>

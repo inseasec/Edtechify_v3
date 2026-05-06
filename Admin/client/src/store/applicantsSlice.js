@@ -46,7 +46,13 @@ export const updateApplicantStatus = createAsyncThunk(
   'applicants/updateStatus',
   async ({ id, status }, { rejectWithValue }) => {
     try {
-      await api.put(CAREERS_PATHS.updateByStatus(id, status))
+      const next = String(status ?? '').toUpperCase()
+      if (next === 'ARCHIVED') {
+        // Rejection => true archive (move media + migrate row to Archived_Careers)
+        await api.put(CAREERS_PATHS.archiveApplicant(id))
+      } else {
+        await api.put(CAREERS_PATHS.updateByStatus(id, status))
+      }
       return { id, status }
     } catch (err) {
       return rejectWithValue(rejectMessage(err, 'Failed to update status'))

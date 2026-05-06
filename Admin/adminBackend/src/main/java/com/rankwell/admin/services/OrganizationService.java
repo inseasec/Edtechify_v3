@@ -76,6 +76,11 @@ public interface OrganizationService {
                   void addTeamImage(Long orgId, MultipartFile image) throws IOException;
                   void deleteTeamImage(Long orgId, String imagePath);
 
+                  // ===== OWNER/DIRECTOR IMAGE LIBRARY =====
+                  void addOwnerImage(Long orgId, MultipartFile image) throws IOException;
+                  void deleteOwnerImage(Long orgId, String imagePath);
+                  void selectOwnerImage(Long orgId, String imagePath);
+
                   // ===== ACHIEVEMENT OPERATIONS =====
                   void addAchievementImage(Long orgId, MultipartFile image) throws IOException;
                   void deleteAchievementImage(Long orgId, String imagePath);

@@ -3,6 +3,7 @@ package com.rankwell.admin.entity;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -11,6 +12,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 
 
 @Entity
@@ -30,6 +33,12 @@ public class OrgDirectorDetail {
 	private String aboutDirector;
 
 	private String directorImage; // file path or URL
+
+    @Column(length = 2048)
+    private String socialUrl;
+
+    @ElementCollection
+    private List<String> ownerImages = new ArrayList<>();
 
 	@OneToOne
 	@JoinColumn(name = "organization_id", nullable = false)
@@ -75,6 +84,22 @@ public class OrgDirectorDetail {
 	public void setDirectorImage(String directorImage) {
 		this.directorImage = directorImage;
 	}
+
+    public String getSocialUrl() {
+        return socialUrl;
+    }
+
+    public void setSocialUrl(String socialUrl) {
+        this.socialUrl = socialUrl;
+    }
+
+    public List<String> getOwnerImages() {
+        return ownerImages;
+    }
+
+    public void setOwnerImages(List<String> ownerImages) {
+        this.ownerImages = ownerImages;
+    }
 
 	public OrganizationDetail getOrganization() {
 		return organization;

@@ -4,6 +4,8 @@ import com.rankwell.admin.entity.OrgGallery;
 import com.rankwell.admin.entity.OrgHome;
 import com.rankwell.admin.entity.OrgTeamGallery;
 import java.util.Map;
+import java.util.List;
+import com.rankwell.admin.dto.OrgAddressDTO;
 
 public class OrganizationDetailDto {
 
@@ -11,6 +13,7 @@ public class OrganizationDetailDto {
 	
 	private String orgName;
 	private String orgAddress;
+	private List<OrgAddressDTO> orgAddresses;
 	private String orgPhone;
 	private String orgEmail; 
 	private String orgLogo;
@@ -19,6 +22,7 @@ public class OrganizationDetailDto {
 	
 	private OrgAboutUsDTO orgAboutUs;
 	private OrgDirectorDetailDTO orgDirectorDetail;
+    private OrgParentCompanyDTO orgParentCompany;
 	private OrgAchievementDTO orgAchievement; 
 	private OrgGallery orgGallery;
 	private OrgTeamGallery orgTeamGallery;
@@ -70,6 +74,12 @@ public class OrganizationDetailDto {
 	public void setOrgAddress(String orgAddress) {
 		this.orgAddress = orgAddress;
 	}
+	public List<OrgAddressDTO> getOrgAddresses() {
+		return orgAddresses;
+	}
+	public void setOrgAddresses(List<OrgAddressDTO> orgAddresses) {
+		this.orgAddresses = orgAddresses;
+	}
 	public String getOrgPhone() {
 		return orgPhone;
 	}
@@ -100,6 +110,14 @@ public class OrganizationDetailDto {
 	public void setOrgDirectorDetail(OrgDirectorDetailDTO orgDirectorDetail) {
 		this.orgDirectorDetail = orgDirectorDetail;
 	}
+
+    public OrgParentCompanyDTO getOrgParentCompany() {
+        return orgParentCompany;
+    }
+
+    public void setOrgParentCompany(OrgParentCompanyDTO orgParentCompany) {
+        this.orgParentCompany = orgParentCompany;
+    }
 	public OrgAchievementDTO getOrgAchievement() {
 		return orgAchievement;
 	}

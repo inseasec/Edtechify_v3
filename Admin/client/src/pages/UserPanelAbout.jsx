@@ -89,6 +89,10 @@ export default function UserPanelAbout() {
   const [directorRole, setDirectorRole] = useState('')
   const [aboutDirector, setAboutDirector] = useState('')
 
+  const [parentCompanyName, setParentCompanyName] = useState('')
+  const [parentCompanyWebsiteUrl, setParentCompanyWebsiteUrl] = useState('')
+  const [parentCompanyDescription, setParentCompanyDescription] = useState('')
+
   const [achievementTitle, setAchievementTitle] = useState(defaultAchievementTitle)
   const [isEditingAchievement, setIsEditingAchievement] = useState(false)
   const [editAchievementValue, setEditAchievementValue] = useState('')
@@ -171,6 +175,11 @@ export default function UserPanelAbout() {
       setDirectorName(od.directorName ?? '')
       setDirectorRole(od.role ?? '')
       setAboutDirector(od.aboutDirector ?? '')
+
+      const pc = data.orgParentCompany ?? {}
+      setParentCompanyName(pc.name ?? '')
+      setParentCompanyWebsiteUrl(pc.websiteUrl ?? '')
+      setParentCompanyDescription(pc.description ?? '')
 
       const oach = data.orgAchievement ?? {}
       setAchievementTitle(oach.achivementTitle ?? oach.achievementTitle ?? defaultAchievementTitle)
@@ -307,6 +316,10 @@ export default function UserPanelAbout() {
       fd.append('orgDirectorDetail.role', directorRole)
       fd.append('orgDirectorDetail.aboutDirector', aboutDirector)
 
+      fd.append('orgParentCompany.name', parentCompanyName)
+      fd.append('orgParentCompany.websiteUrl', parentCompanyWebsiteUrl)
+      fd.append('orgParentCompany.description', parentCompanyDescription)
+
       fd.append('orgAchievement.achivementTitle', achievementTitle)
 
       if (bannerFile) fd.append('aboutWallpaper', bannerFile)
@@ -363,22 +376,33 @@ export default function UserPanelAbout() {
     fd.append('image', file)
     try {
       await api.post(TEAM_ADD_PATH, fd, multipartConfig())
-      showSuccessToast('Team photo added')
-      if (ctxMode) {
-        await ctxFetchAllData?.()
-      } else {
-        await loadDetails()
-      }
+      return true
     } catch (error) {
       console.error(error)
       showErrorToast(error?.response?.data?.message ?? 'Upload failed')
+      return false
     }
   }
 
-  const handleTeamFileChange = (e) => {
-    const file = e.target.files?.[0]
+  const handleTeamFileChange = async (e) => {
+    const filesList = Array.from(e.target.files ?? [])
     e.target.value = ''
-    if (file) uploadTeamImage(file)
+    if (!filesList.length) return
+    setSaving(true)
+    let ok = 0
+    for (const f of filesList) {
+      // Sequential uploads prevent duplicate serial assignment on backend.
+      // eslint-disable-next-line no-await-in-loop
+      const did = await uploadTeamImage(f)
+      if (did) ok += 1
+    }
+    if (ctxMode) {
+      await ctxFetchAllData?.()
+    } else {
+      await loadDetails()
+    }
+    setSaving(false)
+    if (ok > 0) showSuccessToast(`${ok} team photo(s) added`)
   }
 
   const removeTeamImage = async (imagePath) => {
@@ -755,11 +779,68 @@ export default function UserPanelAbout() {
             </div>
           </div>
 
+          <hr className="my-10 h-1 w-full rounded-full bg-black" />
+
+          <div className="mx-auto max-w-4xl px-4 pb-6">
+            <h2 className="text-center text-3xl font-bold text-gray-900 sm:text-4xl">Parent company</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-gray-600">
+              Shown on the public <strong className="font-semibold text-gray-800">About us</strong> page.
+            </p>
+
+            <div className="mt-6 space-y-4 text-left">
+              <Input
+                label="Company name"
+                value={
+                  ctxMode
+                    ? formData?.orgParentCompany?.name ?? ''
+                    : parentCompanyName
+                }
+                onChange={(e) =>
+                  ctxMode
+                    ? setCtxField('orgParentCompany.name', e.target.value)
+                    : setParentCompanyName(e.target.value)
+                }
+              />
+              <Input
+                label="Website URL"
+                value={
+                  ctxMode
+                    ? formData?.orgParentCompany?.websiteUrl ?? ''
+                    : parentCompanyWebsiteUrl
+                }
+                onChange={(e) =>
+                  ctxMode
+                    ? setCtxField('orgParentCompany.websiteUrl', e.target.value)
+                    : setParentCompanyWebsiteUrl(e.target.value)
+                }
+              />
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                <textarea
+                  value={
+                    ctxMode
+                      ? formData?.orgParentCompany?.description ?? ''
+                      : parentCompanyDescription
+                  }
+                  onChange={(e) =>
+                    ctxMode
+                      ? setCtxField('orgParentCompany.description', e.target.value)
+                      : setParentCompanyDescription(e.target.value)
+                  }
+                  rows={6}
+                  placeholder="Write parent company description..."
+                  className="w-full rounded-2xl border-2 border-gray-300 p-4 outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="mx-auto max-w-5xl px-4 py-10">
             <input
               ref={teamFileInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={handleTeamFileChange}
             />
