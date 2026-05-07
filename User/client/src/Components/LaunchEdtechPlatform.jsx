@@ -3,8 +3,145 @@ import { Link } from "react-router-dom";
 import api from "../api";
 import { decodeToken } from "../authConfig";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 const BASE_DOMAIN = "edukify.com";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const COUNTRY_CODES = [
+  { code: "+1", iso: "US", label: "United States / Canada (+1)" },
+  { code: "+7", iso: "RU", label: "Russia / Kazakhstan (+7)" },
+  { code: "+20", label: "Egypt (+20)" },
+  { code: "+27", label: "South Africa (+27)" },
+  { code: "+30", label: "Greece (+30)" },
+  { code: "+31", label: "Netherlands (+31)" },
+  { code: "+32", label: "Belgium (+32)" },
+  { code: "+33", label: "France (+33)" },
+  { code: "+34", label: "Spain (+34)" },
+  { code: "+36", label: "Hungary (+36)" },
+  { code: "+39", label: "Italy (+39)" },
+  { code: "+40", label: "Romania (+40)" },
+  { code: "+41", label: "Switzerland (+41)" },
+  { code: "+43", label: "Austria (+43)" },
+  { code: "+44", label: "United Kingdom (+44)" },
+  { code: "+45", label: "Denmark (+45)" },
+  { code: "+46", label: "Sweden (+46)" },
+  { code: "+47", label: "Norway (+47)" },
+  { code: "+48", label: "Poland (+48)" },
+  { code: "+49", label: "Germany (+49)" },
+  { code: "+51", label: "Peru (+51)" },
+  { code: "+52", label: "Mexico (+52)" },
+  { code: "+53", label: "Cuba (+53)" },
+  { code: "+54", label: "Argentina (+54)" },
+  { code: "+55", label: "Brazil (+55)" },
+  { code: "+56", label: "Chile (+56)" },
+  { code: "+57", label: "Colombia (+57)" },
+  { code: "+58", label: "Venezuela (+58)" },
+  { code: "+60", label: "Malaysia (+60)" },
+  { code: "+61", label: "Australia (+61)" },
+  { code: "+62", label: "Indonesia (+62)" },
+  { code: "+63", label: "Philippines (+63)" },
+  { code: "+64", label: "New Zealand (+64)" },
+  { code: "+65", label: "Singapore (+65)" },
+  { code: "+66", label: "Thailand (+66)" },
+  { code: "+81", label: "Japan (+81)" },
+  { code: "+82", label: "South Korea (+82)" },
+  { code: "+84", label: "Vietnam (+84)" },
+  { code: "+86", label: "China (+86)" },
+  { code: "+90", label: "Turkey (+90)" },
+  { code: "+91", iso: "IN", label: "India (+91)" },
+  { code: "+92", label: "Pakistan (+92)" },
+  { code: "+93", label: "Afghanistan (+93)" },
+  { code: "+94", label: "Sri Lanka (+94)" },
+  { code: "+95", label: "Myanmar (+95)" },
+  { code: "+98", label: "Iran (+98)" },
+  { code: "+212", label: "Morocco (+212)" },
+  { code: "+213", label: "Algeria (+213)" },
+  { code: "+216", label: "Tunisia (+216)" },
+  { code: "+218", label: "Libya (+218)" },
+  { code: "+220", label: "Gambia (+220)" },
+  { code: "+221", label: "Senegal (+221)" },
+  { code: "+234", label: "Nigeria (+234)" },
+  { code: "+254", label: "Kenya (+254)" },
+  { code: "+255", label: "Tanzania (+255)" },
+  { code: "+256", label: "Uganda (+256)" },
+  { code: "+260", label: "Zambia (+260)" },
+  { code: "+263", label: "Zimbabwe (+263)" },
+  { code: "+351", label: "Portugal (+351)" },
+  { code: "+352", label: "Luxembourg (+352)" },
+  { code: "+353", label: "Ireland (+353)" },
+  { code: "+354", label: "Iceland (+354)" },
+  { code: "+355", label: "Albania (+355)" },
+  { code: "+356", label: "Malta (+356)" },
+  { code: "+357", label: "Cyprus (+357)" },
+  { code: "+358", label: "Finland (+358)" },
+  { code: "+359", label: "Bulgaria (+359)" },
+  { code: "+370", label: "Lithuania (+370)" },
+  { code: "+371", label: "Latvia (+371)" },
+  { code: "+372", label: "Estonia (+372)" },
+  { code: "+380", label: "Ukraine (+380)" },
+  { code: "+385", label: "Croatia (+385)" },
+  { code: "+386", label: "Slovenia (+386)" },
+  { code: "+387", label: "Bosnia and Herzegovina (+387)" },
+  { code: "+389", label: "North Macedonia (+389)" },
+  { code: "+420", label: "Czechia (+420)" },
+  { code: "+421", label: "Slovakia (+421)" },
+  { code: "+852", label: "Hong Kong (+852)" },
+  { code: "+880", label: "Bangladesh (+880)" },
+  { code: "+971", label: "United Arab Emirates (+971)" },
+  { code: "+972", label: "Israel (+972)" },
+  { code: "+973", label: "Bahrain (+973)" },
+  { code: "+974", label: "Qatar (+974)" },
+  { code: "+975", label: "Bhutan (+975)" },
+  { code: "+976", label: "Mongolia (+976)" },
+  { code: "+977", label: "Nepal (+977)" },
+  { code: "+994", label: "Azerbaijan (+994)" },
+];
+
+function normalizeDigits(s) {
+  return String(s ?? "").replace(/[^\d]/g, "");
+}
+
+function isValidE164CountryCode(code) {
+  const c = String(code ?? "").trim();
+  if (!/^\+\d{1,4}$/.test(c)) return false;
+  return true;
+}
+
+function isoForCountryCode(code) {
+  const c = String(code ?? "").trim();
+  const row = COUNTRY_CODES.find((x) => x.code === c && x.iso);
+  return row?.iso || null;
+}
+
+function isValidPhoneForCountry(code, digits) {
+  const cc = String(code ?? "").trim();
+  const d = normalizeDigits(digits);
+  if (!isValidE164CountryCode(cc)) return false;
+  if (!d) return false;
+
+  // Use libphonenumber when it can parse — its rules are country-specific.
+  try {
+    const pn = parsePhoneNumberFromString(`${cc}${d}`, isoForCountryCode(cc) || undefined);
+    if (pn) return pn.isValid();
+  } catch {
+    // ignore
+  }
+
+  // Fallback: basic E.164 national significant number length bounds.
+  return d.length >= 6 && d.length <= 15;
+}
+
+function parsePhonePrefill(rawPhone) {
+  const raw = String(rawPhone ?? "").trim();
+  if (!raw) return null;
+  const m = raw.match(/^\+(\d{1,4})\s*(.*)$/);
+  if (!m) return { countryCode: "+91", number: normalizeDigits(raw) };
+  const cc = `+${m[1]}`;
+  const rest = normalizeDigits(m[2]);
+  const known = COUNTRY_CODES.some((c) => c.code === cc) ? cc : "+91";
+  return { countryCode: known, number: rest };
+}
 
 function formatTrialExpiryIso(isoDate) {
   if (!isoDate || typeof isoDate !== "string") return "—";
@@ -134,9 +271,9 @@ function LaunchHero({
   const titleCls = celebration
     ? "text-xl font-bold leading-snug text-white sm:text-2xl"
     : xsSplit
-      ? "text-[11px] font-bold leading-tight text-white sm:text-[12px]"
+      ? "text-[12px] font-bold leading-snug text-white sm:text-[13px]"
       : tightSplit
-        ? "text-[12px] font-bold leading-tight text-white sm:text-[13px]"
+        ? "text-[13px] font-bold leading-snug text-white sm:text-[14px]"
         : "text-base font-bold leading-snug text-white sm:text-lg";
 
   let roundHero = flatTop ? "rounded-none" : "rounded-t-3xl";
@@ -191,7 +328,7 @@ function LaunchHero({
 
         <h1 className={titleCls}>{title}</h1>
         <p
-          className={`mx-auto max-w-sm text-white/95 ${celebration ? "mt-1.5 text-xs leading-relaxed sm:mt-2 sm:text-sm sm:text-base" : xsSplit ? "mt-0 line-clamp-2 text-[9px] leading-snug sm:text-[10px]" : tightSplit ? "mt-0.5 line-clamp-2 text-[10px] leading-snug sm:text-[11px]" : "mt-1.5 text-xs leading-relaxed sm:mt-2 sm:text-sm"}`}
+          className={`mx-auto max-w-sm text-white/95 ${celebration ? "mt-1.5 text-xs leading-relaxed sm:mt-2 sm:text-sm sm:text-base" : xsSplit ? "mt-1 text-[10px] leading-relaxed sm:text-[11px]" : tightSplit ? "mt-1 text-[11px] leading-relaxed sm:text-[12px]" : "mt-1.5 text-xs leading-relaxed sm:mt-2 sm:text-sm"}`}
         >
           {subtitle}
         </p>
@@ -210,11 +347,15 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
   const [submitting, setSubmitting] = useState(false);
   const [portal, setPortal] = useState(null);
 
+  const [errors, setErrors] = useState({});
+
   const [form, setForm] = useState({
     contactPersonName: "",
     companyName: "",
+    roleInCompany: "",
     address: "",
-    phone: "",
+    phoneCountryCode: "+91",
+    phoneNumber: "",
     email: "",
   });
 
@@ -254,10 +395,12 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
         const res = await api.get(`/users/getUser/${userId}`);
         const u = res.data ?? {};
         if (cancelled) return;
+        const parsed = parsePhonePrefill(u.mobileNo || "");
         setForm((f) => ({
           ...f,
           contactPersonName: u.userName || f.contactPersonName,
-          phone: u.mobileNo || f.phone,
+          phoneCountryCode: parsed?.countryCode || f.phoneCountryCode,
+          phoneNumber: parsed?.number || f.phoneNumber,
           email: u.email || f.email,
         }));
       } catch {
@@ -269,15 +412,44 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
     };
   }, [userId, portal]);
 
+  const validateStep1 = (nextForm = form) => {
+    const e = {};
+    const name = String(nextForm.contactPersonName ?? "").trim();
+    const company = String(nextForm.companyName ?? "").trim();
+    const role = String(nextForm.roleInCompany ?? "").trim();
+    const address = String(nextForm.address ?? "").trim();
+    const email = String(nextForm.email ?? "").trim();
+    const cc = String(nextForm.phoneCountryCode ?? "").trim();
+    const phone = String(nextForm.phoneNumber ?? "").trim();
+
+    if (!company) e.companyName = "Organization name is required.";
+    if (!address) e.address = "Address is required.";
+    if (!name) e.contactPersonName = "Your name is required.";
+    if (!role) e.roleInCompany = "Your role in company is required.";
+    if (!email) e.email = "Email is required.";
+    else if (!EMAIL_RE.test(email)) e.email = "Please enter a valid email address.";
+    if (!isValidE164CountryCode(cc)) e.phoneCountryCode = "Please select a valid country code.";
+    if (!phone) e.phoneNumber = "Mobile number is required.";
+    else if (!isValidPhoneForCountry(cc, phone)) e.phoneNumber = "Please enter a valid mobile number for the selected country.";
+
+    return e;
+  };
+
+  const setField = (key, value) => {
+    setForm((f) => ({ ...f, [key]: value }));
+    // Clear existing error as the user edits (final validation still runs on Next).
+    setErrors((prev) => {
+      if (!prev?.[key]) return prev;
+      const copy = { ...prev };
+      delete copy[key];
+      return copy;
+    });
+  };
+
   const handleFormNext = async () => {
-    if (!form.contactPersonName?.trim()) {
-      showErrorToast("Please add your name so we know who to cheer for.");
-      return;
-    }
-    if (!form.companyName?.trim()) {
-      showErrorToast("Please add your organization name.");
-      return;
-    }
+    const e = validateStep1(form);
+    setErrors(e);
+    if (Object.keys(e).length) return;
     try {
       const res = await api.get("/clients/suggest-subdomain", {
         params: { company: form.companyName.trim() },
@@ -293,12 +465,15 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
   const handleLaunch = async () => {
     setSubmitting(true);
     try {
+      const email = String(form.email ?? "").trim();
+      const phone = `${String(form.phoneCountryCode ?? "").trim()} ${normalizeDigits(form.phoneNumber)}`.trim();
       const res = await api.post("/clients/launch", {
         contactPersonName: form.contactPersonName.trim(),
         companyName: form.companyName.trim(),
-        address: form.address?.trim() || "",
-        phone: form.phone?.trim() || "",
-        email: form.email?.trim() || "",
+        roleInCompany: form.roleInCompany.trim(),
+        address: form.address.trim(),
+        phone,
+        email,
         subdomain: subdomain.trim(),
       });
       setPortal(res.data);
@@ -476,54 +651,155 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
           </div>
           <div className="flex flex-1 flex-col justify-center gap-3 border-t border-sky-100/60 bg-white px-5 py-5 md:border-l md:border-t-0 md:px-6 md:py-6 lg:px-7 rounded-b-3xl md:rounded-bl-none md:rounded-br-3xl md:rounded-tr-3xl">
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Your name</span>
-              <input
-                type="text"
-                placeholder="How should we greet you?"
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                value={form.contactPersonName}
-                onChange={(e) => setForm((f) => ({ ...f, contactPersonName: e.target.value }))}
-              />
-            </label>
-            <label className="block">
               <span className="text-sm font-semibold text-slate-700">Organization name</span>
               <input
                 type="text"
                 placeholder="School or company name"
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                className={`mt-1.5 w-full rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+                  errors.companyName
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                    : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                }`}
                 value={form.companyName}
-                onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
+                onChange={(e) => setField("companyName", e.target.value)}
+                onBlur={() => setErrors(validateStep1(form))}
+                required
+                aria-invalid={Boolean(errors.companyName)}
               />
+              {errors.companyName ? (
+                <p className="mt-1 text-xs font-medium text-red-600">{errors.companyName}</p>
+              ) : null}
             </label>
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">Address</span>
               <textarea
-                placeholder="Optional — helps us keep your records tidy"
-                className="mt-1.5 w-full min-h-[88px] resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                placeholder="Street, city, state, country"
+                className={`mt-1.5 w-full min-h-[88px] resize-y rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+                  errors.address
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                    : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                }`}
                 value={form.address}
-                onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                onChange={(e) => setField("address", e.target.value)}
+                onBlur={() => setErrors(validateStep1(form))}
+                required
+                aria-invalid={Boolean(errors.address)}
               />
+              {errors.address ? <p className="mt-1 text-xs font-medium text-red-600">{errors.address}</p> : null}
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Phone</span>
+              <span className="text-sm font-semibold text-slate-700">Your name</span>
               <input
-                type="tel"
-                placeholder="So we can reach you if needed"
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200"
-                value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                type="text"
+                placeholder="How should we greet you?"
+                className={`mt-1.5 w-full rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+                  errors.contactPersonName
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                    : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                }`}
+                value={form.contactPersonName}
+                onChange={(e) => setField("contactPersonName", e.target.value)}
+                onBlur={() => setErrors(validateStep1(form))}
+                required
+                aria-invalid={Boolean(errors.contactPersonName)}
               />
+              {errors.contactPersonName ? (
+                <p className="mt-1 text-xs font-medium text-red-600">{errors.contactPersonName}</p>
+              ) : null}
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Your role in company</span>
+              <input
+                type="text"
+                placeholder="e.g. Owner, Principal, HR, Admin"
+                className={`mt-1.5 w-full rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+                  errors.roleInCompany
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                    : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                }`}
+                value={form.roleInCompany}
+                onChange={(e) => setField("roleInCompany", e.target.value)}
+                onBlur={() => setErrors(validateStep1(form))}
+                required
+                aria-invalid={Boolean(errors.roleInCompany)}
+              />
+              {errors.roleInCompany ? (
+                <p className="mt-1 text-xs font-medium text-red-600">{errors.roleInCompany}</p>
+              ) : null}
             </label>
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">Email</span>
               <input
                 type="email"
-                placeholder="We'll send helpful updates here"
-                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200"
+                placeholder="name@company.com"
+                className={`mt-1.5 w-full rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+                  errors.email
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                    : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                }`}
                 value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                onChange={(e) => setField("email", e.target.value)}
+                onBlur={() => setErrors(validateStep1(form))}
+                required
+                aria-invalid={Boolean(errors.email)}
               />
+              {errors.email ? <p className="mt-1 text-xs font-medium text-red-600">{errors.email}</p> : null}
             </label>
+            <div className="block">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Mobile</span>
+              </label>
+              <div className="mt-1.5 flex gap-2">
+                <select
+                  className={`w-[180px] rounded-xl border bg-white px-3 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+                    errors.phoneCountryCode
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                      : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                  }`}
+                  value={form.phoneCountryCode}
+                  onChange={(e) => setField("phoneCountryCode", e.target.value)}
+                  onBlur={() => setErrors(validateStep1(form))}
+                  required
+                  aria-label="Country code"
+                  aria-invalid={Boolean(errors.phoneCountryCode)}
+                >
+                  {COUNTRY_CODES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Mobile number"
+                  className={`flex-1 rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+                    errors.phoneNumber
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                      : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                  }`}
+                  value={form.phoneNumber}
+                  onChange={(e) =>
+                    setField("phoneNumber", normalizeDigits(e.target.value))
+                  }
+                  onBlur={() => setErrors(validateStep1(form))}
+                  required
+                  aria-label="Mobile number"
+                  aria-invalid={Boolean(errors.phoneNumber)}
+                />
+              </div>
+              {errors.phoneCountryCode ? (
+                <p className="mt-1 text-xs font-medium text-red-600">{errors.phoneCountryCode}</p>
+              ) : null}
+              {errors.phoneNumber ? (
+                <p className="mt-1 text-xs font-medium text-red-600">{errors.phoneNumber}</p>
+              ) : (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  We&apos;ll use this if we need to reach you. Digits only (6–15).
+                </p>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleFormNext}

@@ -1,14 +1,12 @@
 package com.RankwellClient.dto;
 
-public class LaunchPortalRequest {
-
+public class UpdatePortalRequest {
 	private String contactPersonName;
 	private String companyName;
 	private String roleInCompany;
 	private String address;
 	private String phone;
 	private String email;
-	private String subdomain;
 
 	public String getContactPersonName() {
 		return contactPersonName;
@@ -57,12 +55,5 @@ public class LaunchPortalRequest {
 	public void setEmail(String email) {
 		this.email = email;
 	}
-
-	public String getSubdomain() {
-		return subdomain;
-	}
-
-	public void setSubdomain(String subdomain) {
-		this.subdomain = subdomain;
-	}
 }
+

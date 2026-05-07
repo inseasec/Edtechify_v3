@@ -27,6 +27,9 @@ public class EdukifyClient {
 	@Column(name = "company_name", nullable = false, length = 255)
 	private String companyName;
 
+	@Column(name = "role_in_company", length = 255)
+	private String roleInCompany;
+
 	@Column(length = 2048)
 	private String address;
 
@@ -91,6 +94,14 @@ public class EdukifyClient {
 
 	public void setCompanyName(String companyName) {
 		this.companyName = companyName;
+	}
+
+	public String getRoleInCompany() {
+		return roleInCompany;
+	}
+
+	public void setRoleInCompany(String roleInCompany) {
+		this.roleInCompany = roleInCompany;
 	}
 
 	public String getAddress() {

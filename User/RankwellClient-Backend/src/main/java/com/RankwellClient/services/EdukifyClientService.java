@@ -17,8 +17,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.RankwellClient.dto.LaunchPortalRequest;
 import com.RankwellClient.dto.PortalLaunchResponse;
+import com.RankwellClient.dto.UpdatePortalRequest;
 import com.RankwellClient.entity.EdukifyClient;
+import com.RankwellClient.entity.Users;
 import com.RankwellClient.repository.EdukifyClientRepository;
+import com.RankwellClient.repository.UserRepository;
 
 @Service
 public class EdukifyClientService {
@@ -30,12 +33,14 @@ public class EdukifyClientService {
 			"help", "blog", "status", "localhost", "test", "staging", "dev");
 
 	private final EdukifyClientRepository eduClientRepository;
+	private final UserRepository userRepository;
 
 	@Value("${EDUKIFY_PORTAL_BASE_DOMAIN:edukify.com}")
 	private String portalBaseDomain;
 
-	public EdukifyClientService(EdukifyClientRepository eduClientRepository) {
+	public EdukifyClientService(EdukifyClientRepository eduClientRepository, UserRepository userRepository) {
 		this.eduClientRepository = eduClientRepository;
+		this.userRepository = userRepository;
 	}
 
 	public static String slugifyCompanyName(String companyName) {
@@ -122,6 +127,7 @@ public class EdukifyClientService {
 		r.setId(c.getId());
 		r.setContactPersonName(c.getContactPersonName());
 		r.setCompanyName(c.getCompanyName());
+		r.setRoleInCompany(c.getRoleInCompany());
 		r.setAddress(c.getAddress());
 		r.setPhone(c.getPhone());
 		r.setEmail(c.getEmail());
@@ -182,20 +188,84 @@ public class EdukifyClientService {
 		if (req.getCompanyName() == null || req.getCompanyName().isBlank()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company name is required");
 		}
+		if (req.getRoleInCompany() == null || req.getRoleInCompany().isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role in company is required");
+		}
+		if (req.getAddress() == null || req.getAddress().isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Address is required");
+		}
+		if (req.getEmail() == null || req.getEmail().isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+		}
+		if (req.getPhone() == null || req.getPhone().isBlank()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone is required");
+		}
+
+		// One-time fill: copy missing login identifiers from launch, but NEVER overwrite signup identifiers.
+		Users u = userRepository.findById(userId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
+		String reqEmail = req.getEmail().trim().toLowerCase(Locale.ROOT);
+		String reqPhone = req.getPhone().trim();
+
+		boolean changed = false;
+		if ((u.getEmail() == null || u.getEmail().isBlank())) {
+			// Only set if not already used by another account.
+			if (userRepository.findByEmail(reqEmail).isEmpty()) {
+				u.setEmail(reqEmail);
+				changed = true;
+			}
+		}
+		if ((u.getMobileNo() == null || u.getMobileNo().isBlank())) {
+			if (userRepository.findByMobileNo(reqPhone).isEmpty()) {
+				u.setMobileNo(reqPhone);
+				changed = true;
+			}
+		}
+		if (changed) {
+			userRepository.save(u);
+		}
 
 		EdukifyClient c = new EdukifyClient();
 		c.setUserId(userId);
 		c.setContactPersonName(req.getContactPersonName().trim());
 		c.setCompanyName(req.getCompanyName().trim());
-		c.setAddress(req.getAddress() != null ? req.getAddress().trim() : null);
-		c.setPhone(req.getPhone() != null ? req.getPhone().trim() : null);
-		c.setEmail(req.getEmail() != null ? req.getEmail().trim().toLowerCase(Locale.ROOT) : null);
+		c.setRoleInCompany(req.getRoleInCompany().trim());
+		c.setAddress(req.getAddress().trim());
+		c.setPhone(reqPhone);
+		c.setEmail(reqEmail);
 		c.setSubdomain(subdomain);
 		c.setSubscription("Trial");
 		c.setPortalLaunchedAt(Instant.now());
 		int defaultTrialDays = 14;
 		LocalDate anchor = c.getPortalLaunchedAt().atZone(TRIAL_ZONE).toLocalDate();
 		c.setTrialExpiresOn(anchor.plusDays(defaultTrialDays - 1L));
+
+		EdukifyClient saved = eduClientRepository.save(c);
+		return toResponse(saved);
+	}
+
+	public PortalLaunchResponse updateForUser(Long userId, UpdatePortalRequest req) {
+		EdukifyClient c = eduClientRepository.findByUserId(userId)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No company profile yet"));
+
+		String contact = req.getContactPersonName() != null ? req.getContactPersonName().trim() : "";
+		String role = req.getRoleInCompany() != null ? req.getRoleInCompany().trim() : "";
+		String address = req.getAddress() != null ? req.getAddress().trim() : "";
+		String phone = req.getPhone() != null ? req.getPhone().trim() : "";
+		String email = req.getEmail() != null ? req.getEmail().trim().toLowerCase(Locale.ROOT) : "";
+
+		if (contact.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contact person is required");
+		if (role.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role in company is required");
+		if (address.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Address is required");
+		if (phone.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone is required");
+		if (email.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+
+		c.setContactPersonName(contact);
+		// Company name is immutable after launch.
+		c.setRoleInCompany(role);
+		c.setAddress(address);
+		c.setPhone(phone);
+		c.setEmail(email);
 
 		EdukifyClient saved = eduClientRepository.save(c);
 		return toResponse(saved);

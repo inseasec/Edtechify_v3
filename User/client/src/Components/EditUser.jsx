@@ -28,6 +28,7 @@ export default function EditUser({ isOpen, isClose, refreshUser }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "email") return; // email is not editable
+    if (name === "mobileNo") return; // mobile is not editable
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -37,7 +38,6 @@ export default function EditUser({ isOpen, isClose, refreshUser }) {
     try {
       await api.put(`/users/updateUserInfo/${userId}`, {
         userName: form.userName,
-        mobileNo: form.mobileNo || undefined,
       });
       showSuccessToast("Profile updated");
       await refreshUser?.();
@@ -69,8 +69,10 @@ export default function EditUser({ isOpen, isClose, refreshUser }) {
             <input
               name="mobileNo"
               value={form.mobileNo}
-              onChange={handleChange}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              readOnly
+              aria-readonly="true"
+              title="Mobile cannot be changed"
+              className="mt-1 w-full cursor-not-allowed rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500"
             />
           </div>
           <div className="flex gap-2 justify-end pt-2">
@@ -81,7 +83,12 @@ export default function EditUser({ isOpen, isClose, refreshUser }) {
             >
               Cancel
             </button>
-            <button type="submit" className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white">
+            <button
+              type="submit"
+              disabled
+              className="cursor-not-allowed rounded-md bg-blue-600/60 px-4 py-2 text-sm text-white"
+              title="Login details cannot be changed"
+            >
               Save
             </button>
           </div>
