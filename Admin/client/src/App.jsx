@@ -11,6 +11,7 @@ import AllInvoices from './pages/AllInvoices'
 import SubscriptionPlans from './pages/SubscriptionPlans'
 import SmtpServerSettings from './pages/SmtpServerSettings'
 import SmsServiceSettings from './pages/SmsServiceSettings'
+import LaunchCodeSettings from './pages/LaunchCodeSettings'
 import CareersPage from './pages/CareersPage'
 import CareersSettingsPanel from './pages/CareersSettingsPanel'
 import CareersVideosPage from './pages/CareersVideosPage'
@@ -49,6 +50,7 @@ const adminChildRoutes = (
     <Route path="company-details/support-chat-settings" element={<ChatSupport />} />
     <Route path="company-details/smtp-server-settings" element={<SmtpServerSettings />} />
     <Route path="company-details/sms-service-settings" element={<SmsServiceSettings />} />
+    <Route path="company-details/launch-code-settings" element={<LaunchCodeSettings />} />
     <Route path="settings/career" element={<CareersSettingsPanel />} />
     <Route path="careers/videos" element={<CareersVideosPage />} />
     <Route path="careers/applicant/:applicantId" element={<ApplicantDetails />} />

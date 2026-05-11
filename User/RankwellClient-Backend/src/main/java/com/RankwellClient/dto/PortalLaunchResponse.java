@@ -1,5 +1,7 @@
 package com.RankwellClient.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class PortalLaunchResponse {
 
 	private Long id;
@@ -11,6 +13,14 @@ public class PortalLaunchResponse {
 	private String email;
 	private String subdomain;
 	private String subscription;
+	/**
+	 * Display plan line aligned with the admin subscription grid (date vs today + trial detection):
+	 * {@code Trial}, {@code Trial_expired}, {@code subscription_expired}, or the paid plan name.
+	 */
+	private String planStatus;
+	/** Persisted {@code clients.portal_live_status}: YES / NO (same source as admin Live column). */
+	@JsonProperty("portalAccessStatus")
+	private String portalAccessStatus;
 	private String siteUrl;
 	private String adminUrl;
 
@@ -93,6 +103,22 @@ public class PortalLaunchResponse {
 
 	public void setSubscription(String subscription) {
 		this.subscription = subscription;
+	}
+
+	public String getPlanStatus() {
+		return planStatus;
+	}
+
+	public void setPlanStatus(String planStatus) {
+		this.planStatus = planStatus;
+	}
+
+	public String getPortalAccessStatus() {
+		return portalAccessStatus;
+	}
+
+	public void setPortalAccessStatus(String portalAccessStatus) {
+		this.portalAccessStatus = portalAccessStatus;
 	}
 
 	public String getSiteUrl() {

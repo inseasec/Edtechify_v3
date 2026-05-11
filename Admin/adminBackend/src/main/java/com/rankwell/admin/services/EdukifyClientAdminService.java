@@ -156,12 +156,6 @@ public class EdukifyClientAdminService {
 		}
 		EdukifyClient c = eduClientRepository.findByUserId(userId)
 				.orElseThrow(() -> new java.util.NoSuchElementException("Client not found"));
-		if (PortalTrialAccessSyncService.STATUS_YES.equals(v) && c.getTrialExpiresOn() != null) {
-			java.time.LocalDate today = java.time.LocalDate.now();
-			if (today.isAfter(c.getTrialExpiresOn())) {
-				throw new IllegalArgumentException("Cannot set Live = YES for an expired portal. Extend expiry date first.");
-			}
-		}
 		c.setPortalAccessStatus(v);
 		eduClientRepository.save(c);
 

@@ -118,6 +118,7 @@ const Sidebar = () => {
     { to: `${base}/company-details/all-invoices`, label: 'All Invoices' },
     { to: `${base}/company-details/subscription-plans`, label: 'Subscription Plans' },
     { to: `${base}/company-details/support-chat-settings`, label: 'Support Chat Settings' },
+    { to: `${base}/company-details/launch-code-settings`, label: 'Launch code' },
   ];
 
   const userPanelLinks = [

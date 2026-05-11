@@ -10,6 +10,9 @@ public class LaunchPortalRequest {
 	private String email;
 	private String subdomain;
 
+	/** Required when the platform launch gate is enabled (same value as verified on the gate step). */
+	private String launchCode;
+
 	public String getContactPersonName() {
 		return contactPersonName;
 	}
@@ -64,5 +67,13 @@ public class LaunchPortalRequest {
 
 	public void setSubdomain(String subdomain) {
 		this.subdomain = subdomain;
+	}
+
+	public String getLaunchCode() {
+		return launchCode;
+	}
+
+	public void setLaunchCode(String launchCode) {
+		this.launchCode = launchCode;
 	}
 }

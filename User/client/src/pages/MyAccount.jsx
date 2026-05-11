@@ -7,9 +7,9 @@ import Settings from "../Components/Settings";
 import ChangePassword from "../Components/ChangePassword";
 import TermAndCondition from "../Components/TermAndCondition";
 import BillingInvoices from "../Components/BillingInvoices";
-import ConfirmPaymentPage from "../Components/ConfirmPaymentPage";
 import LaunchEdtechPlatform from "../Components/LaunchEdtechPlatform";
 import SubscriptionPlanPicker from "../Components/SubscriptionPlanPicker";
+import SubscriptionCheckoutPage from "../Components/SubscriptionCheckoutPage";
 
 function MyAccount() {
   const { component } = useParams();
@@ -59,10 +59,10 @@ function MyAccount() {
         return <TermAndCondition />;
       case "invoices":
         return <BillingInvoices />;
-      case "buynow":
-        return <ConfirmPaymentPage />;
       case "upgrade-plans":
         return <SubscriptionPlanPicker />;
+      case "subscription-checkout":
+        return <SubscriptionCheckoutPage />;
       case "launch":
         return <LaunchEdtechPlatform onPortalPresenceChange={handlePortalPresenceChange} />;
       default:
@@ -136,7 +136,6 @@ function MyAccount() {
                 {mobileItem("account", "ri-user-settings-line", "Account")}
                 {mobileItem("launch", "ri-rocket-line", edtechPortalNavLabel)}
                 {mobileItem("settings", "ri-settings-5-line", "Settings")}
-                {mobileItem("buynow", "ri-shopping-bag-3-line", "Buy Now")}
                 {mobileItem("invoices", "ri-bill-line", "Billing and Invoices")}
                 {mobileItem("changepassword", "ri-rotate-lock-line", "Change Password")}
                 {mobileItem("termsandcondition", "ri-shield-keyhole-line", "Terms and Conditions")}
@@ -164,7 +163,6 @@ function MyAccount() {
               {desktopItem("account", "ri-user-settings-line", "Account")}
               {desktopItem("launch", "ri-rocket-line", edtechPortalNavLabel)}
               {desktopItem("settings", "ri-settings-5-line", "Settings")}
-              {desktopItem("buynow", "ri-shopping-bag-3-line", "Buy Now")}
               {desktopItem("invoices", "ri-bill-line", "Billing and Invoices")}
               {desktopItem("changepassword", "ri-rotate-lock-line", "Change Password")}
               {desktopItem("termsandcondition", "ri-shield-keyhole-line", "Terms and Conditions")}

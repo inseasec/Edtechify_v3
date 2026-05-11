@@ -686,7 +686,7 @@ export default function AdminStudents() {
                 </th>
                 <th
                   className="py-2.5 pl-6 pr-4 text-center font-semibold whitespace-nowrap border-l border-gray-200"
-                  title="Portal live status (YES/NO)"
+                  title="Portal live (YES/NO). Edits here do not change expiry or plan; those fields do not change this toggle."
                 >
                   Live
                 </th>
@@ -697,8 +697,6 @@ export default function AdminStudents() {
                 const uid = row.userId ?? row.user_id ?? row.id
                 const uidKey = String(uid)
                 const phone = row.portalPhone || row.mobileNo
-                // Superseded by date-based `expiredByDate` and planLabel logic.
-                // Keep portalAccessStatus for future enforcement/metrics if needed.
                 const effD = effectiveTrialDays(row, savedTrialDefaults)
                 const effM = effectiveTrialMb(row, savedTrialDefaults)
                 const isTrial = isTrialPlanRow(row)
@@ -975,18 +973,13 @@ export default function AdminStudents() {
                         <button
                           type="button"
                           onClick={() => {
-                            const nextYes = !liveEffective
-                            if (nextYes && expiredByDate) {
-                              showErrorToast('Cannot set Live = YES for an expired portal. Extend expiry date first.')
-                              return
-                            }
-                            togglePortalLiveStatus(uid, nextYes)
+                            togglePortalLiveStatus(uid, !liveEffective)
                           }}
                           className="inline-flex items-center justify-center p-0.5"
                           title={liveEffective ? 'Live (YES) — click to disable' : 'Not live (NO) — click to enable'}
                           aria-label={liveEffective ? 'Set portal live status to NO' : 'Set portal live status to YES'}
                         >
-                          {liveEffective && !expiredByDate ? (
+                          {liveEffective ? (
                             <ToggleLeft className="h-8 w-8 text-green-600 shrink-0" />
                           ) : (
                             <ToggleRight className="h-8 w-8 text-red-600 shrink-0" />

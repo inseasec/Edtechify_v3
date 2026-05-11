@@ -34,13 +34,18 @@ public class EdukifyClientService {
 
 	private final EdukifyClientRepository eduClientRepository;
 	private final UserRepository userRepository;
+	private final LaunchGateService launchGateService;
 
 	@Value("${EDUKIFY_PORTAL_BASE_DOMAIN:edukify.com}")
 	private String portalBaseDomain;
 
-	public EdukifyClientService(EdukifyClientRepository eduClientRepository, UserRepository userRepository) {
+	public EdukifyClientService(
+			EdukifyClientRepository eduClientRepository,
+			UserRepository userRepository,
+			LaunchGateService launchGateService) {
 		this.eduClientRepository = eduClientRepository;
 		this.userRepository = userRepository;
+		this.launchGateService = launchGateService;
 	}
 
 	public static String slugifyCompanyName(String companyName) {
@@ -137,41 +142,82 @@ public class EdukifyClientService {
 		r.setStorageUsedBytes(usedBytes);
 
 		String sub = c.getSubscription() == null ? "" : c.getSubscription().trim();
-		boolean isTrial = sub.isEmpty() || "trial".equalsIgnoreCase(sub);
+		boolean trialLike = isTrialPlanForLabel(sub);
 
 		Integer limitDays = c.getTrialLimitDays();
 		Integer limitMb = c.getTrialLimitStorageMb();
 
-		if (isTrial) {
+		LocalDate effectiveEndInclusive = null;
+
+		if (trialLike) {
 			int effectiveDays = (limitDays != null && limitDays > 0) ? limitDays : 14;
 			int effectiveMb = (limitMb != null && limitMb > 0) ? limitMb : 512;
 			r.setStorageAllocatedMb(effectiveMb);
 			if (c.getTrialExpiresOn() != null) {
-				r.setTrialExpiresOn(c.getTrialExpiresOn().format(DateTimeFormatter.ISO_LOCAL_DATE));
+				effectiveEndInclusive = c.getTrialExpiresOn();
+				r.setTrialExpiresOn(effectiveEndInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE));
 			} else {
 				Instant launched = c.getPortalLaunchedAt();
 				if (launched != null && effectiveDays >= 1) {
 					LocalDate anchor = launched.atZone(TRIAL_ZONE).toLocalDate();
-					LocalDate endInclusive = anchor.plusDays((long) effectiveDays - 1);
-					r.setTrialExpiresOn(endInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE));
+					effectiveEndInclusive = anchor.plusDays((long) effectiveDays - 1);
+					r.setTrialExpiresOn(effectiveEndInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE));
 				} else {
 					r.setTrialExpiresOn(null);
 				}
 			}
 		} else {
 			// For subscriptions we still show expiry if present (same DB column used in admin grid).
-			if (c.getTrialExpiresOn() != null) {
-				r.setTrialExpiresOn(c.getTrialExpiresOn().format(DateTimeFormatter.ISO_LOCAL_DATE));
+			effectiveEndInclusive = c.getTrialExpiresOn();
+			if (effectiveEndInclusive != null) {
+				r.setTrialExpiresOn(effectiveEndInclusive.format(DateTimeFormatter.ISO_LOCAL_DATE));
 			} else {
 				r.setTrialExpiresOn(null);
 			}
 			r.setStorageAllocatedMb(limitMb != null && limitMb > 0 ? limitMb : null);
 		}
 
+		r.setPlanStatus(computePlanStatusLabel(sub, trialLike, effectiveEndInclusive));
+
+		String pas = c.getPortalAccessStatus();
+		if (pas != null) {
+			pas = pas.trim();
+			if (pas.isEmpty()) {
+				pas = null;
+			}
+		}
+		// Expose DB value as-is (null/blank = omit/null in JSON). Do not coerce to YES — that hid admin "off".
+		r.setPortalAccessStatus(pas);
+
 		String host = c.getSubdomain() + "." + portalBaseDomain;
 		r.setSiteUrl("https://" + host + "/");
 		r.setAdminUrl("https://" + host + "/admin");
 		return r;
+	}
+
+	/** Same trial detection as the admin subscription grid ({@code AdminStudents.jsx} {@code isTrialPlanRow}). */
+	private static boolean isTrialPlanForLabel(String subscriptionTrimmed) {
+		if (subscriptionTrimmed == null || subscriptionTrimmed.isEmpty()) {
+			return true;
+		}
+		String s = subscriptionTrimmed.toLowerCase(Locale.ROOT);
+		return "trial".equals(s) || s.startsWith("trial_") || s.startsWith("trial ") || s.startsWith("trial-");
+	}
+
+	/** Same labels as the admin Plan column for a launched portal. */
+	private static String computePlanStatusLabel(String subscriptionRaw, boolean trialLike, LocalDate endInclusive) {
+		LocalDate today = LocalDate.now(TRIAL_ZONE);
+		boolean expiredByDate = endInclusive != null && today.isAfter(endInclusive);
+		if (expiredByDate) {
+			return trialLike ? "Trial_expired" : "subscription_expired";
+		}
+		if (trialLike) {
+			return "Trial";
+		}
+		if (subscriptionRaw == null || subscriptionRaw.isBlank()) {
+			return "Subscription";
+		}
+		return subscriptionRaw;
 	}
 
 	public PortalLaunchResponse launch(Long userId, LaunchPortalRequest req) {
@@ -199,6 +245,10 @@ public class EdukifyClientService {
 		}
 		if (req.getPhone() == null || req.getPhone().isBlank()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone is required");
+		}
+		if (launchGateService.isLaunchGateActive()
+				&& !launchGateService.matchesSubmittedCode(req.getLaunchCode())) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect launch code.");
 		}
 
 		// One-time fill: copy missing login identifiers from launch, but NEVER overwrite signup identifiers.

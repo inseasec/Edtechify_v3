@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api";
 import { showErrorToast } from "../utils/toastUtils";
 
@@ -26,6 +26,7 @@ function formatDurationDays(days) {
 }
 
 export default function SubscriptionPlanPicker() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +39,10 @@ export default function SubscriptionPlanPicker() {
       const list = Array.isArray(data) ? data : [];
       setPlans(list);
       if (list.length > 0) {
-        setSelectedId(list[0].id);
+        const preferredIdRaw = location?.state?.currentPlanId;
+        const preferredId = preferredIdRaw != null ? Number(preferredIdRaw) : null;
+        const exists = preferredId != null && list.some((p) => Number(p.id) === preferredId);
+        setSelectedId(exists ? preferredId : list[0].id);
       }
     } catch (e) {
       showErrorToast(axiosErrorMessage(e, "Could not load subscription plans."));
@@ -46,7 +50,7 @@ export default function SubscriptionPlanPicker() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [location?.state?.currentPlanId]);
 
   useEffect(() => {
     load();
@@ -59,7 +63,7 @@ export default function SubscriptionPlanPicker() {
       showErrorToast("Choose a plan to continue.");
       return;
     }
-    navigate("/account/buynow", { state: { plan: selected, checkoutKind: "subscription" } });
+    navigate("/account/subscription-checkout", { state: { plan: selected } });
   };
 
   return (

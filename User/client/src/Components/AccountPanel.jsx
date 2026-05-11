@@ -8,6 +8,8 @@ import api from "../api";
 import ProgressBar from "../utils/ProgressBar";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { portalLiveDisplay } from "../utils/portalLiveUtils";
+import { describeCountryCodeError } from "../utils/phoneCountryValidation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -150,6 +152,17 @@ export default function AccountPanel() {
   const [isCompanyEditOpen, setIsCompanyEditOpen] = useState(false);
   const [companySubmitting, setCompanySubmitting] = useState(false);
   const [companyErrors, setCompanyErrors] = useState({});
+  const [billingSubmitting, setBillingSubmitting] = useState(false);
+  const [gstSubmitting, setGstSubmitting] = useState(false);
+  const [billingEditOpen, setBillingEditOpen] = useState(false);
+  const [gstEditOpen, setGstEditOpen] = useState(false);
+  const [billingErrors, setBillingErrors] = useState({});
+  const [gstError, setGstError] = useState("");
+  const [billingForm, setBillingForm] = useState({
+    billingName: "",
+    billingAddress: "",
+  });
+  const [gstForm, setGstForm] = useState({ billingGstNo: "" });
   const [companyForm, setCompanyForm] = useState({
     companyName: "",
     contactPersonName: "",
@@ -209,6 +222,81 @@ export default function AccountPanel() {
     }
   }, [user_ID]);
 
+  const openBillingEdit = () => {
+    setBillingErrors({});
+    setBillingEditOpen(true);
+    setBillingForm({
+      billingName: effectiveBillingName,
+      billingAddress: effectiveBillingAddress,
+    });
+  };
+
+  const openGstEdit = () => {
+    setGstError("");
+    setGstEditOpen(true);
+    setGstForm({ billingGstNo: billingInfo?.billingGstNo || "" });
+  };
+
+  const validateBillingForm = (f = billingForm) => {
+    const e = {};
+    const name = String(f.billingName ?? "").trim();
+    const address = String(f.billingAddress ?? "").trim();
+
+    if (!name) e.billingName = "Name is required.";
+    if (!address) e.billingAddress = "Address is required.";
+    return e;
+  };
+
+  const saveBilling = async () => {
+    const e = validateBillingForm(billingForm);
+    setBillingErrors(e);
+    if (Object.keys(e).length) return;
+    setBillingSubmitting(true);
+    try {
+      const payload = {
+        sameAsCompany: false, // editing billing profile implies a custom billing snapshot
+        billingName: String(billingForm.billingName ?? "").trim(),
+        // Phone/email are taken from Company detail (no need to store duplicates here)
+        billingEmail: null,
+        billingPhone: null,
+        billingAddress: String(billingForm.billingAddress ?? "").trim(),
+        // Preserve GST if user edits only billing details.
+        billingGstNo: billingInfo?.billingGstNo ?? null,
+      };
+      const res = await api.put("/billing/me", payload);
+      setBillingInfo(res.data ?? null);
+      setBillingEditOpen(false);
+      showSuccessToast("Billing details updated.");
+    } catch (err) {
+      showErrorToast(err?.response?.data?.message || err?.response?.data || "Update failed");
+    } finally {
+      setBillingSubmitting(false);
+    }
+  };
+
+  const saveGst = async () => {
+    const gst = String(gstForm.billingGstNo ?? "").trim();
+    if (gst.length > 64) {
+      setGstError("GST is too long.");
+      return;
+    }
+    setGstSubmitting(true);
+    try {
+      const payload = {
+        sameAsCompany: Boolean(billingInfo?.sameAsCompany ?? true),
+        billingGstNo: gst || null,
+      };
+      const res = await api.put("/billing/me", payload);
+      setBillingInfo(res.data ?? null);
+      setGstEditOpen(false);
+      showSuccessToast("GST updated.");
+    } catch (err) {
+      showErrorToast(err?.response?.data?.message || err?.response?.data || "Update failed");
+    } finally {
+      setGstSubmitting(false);
+    }
+  };
+
   const openCompanyEdit = () => {
     if (!portalInfo) return;
     setCompanyErrors({});
@@ -242,10 +330,12 @@ export default function AccountPanel() {
     if (!email) e.email = "Email is required.";
     else if (!EMAIL_RE.test(email)) e.email = "Enter a valid email address.";
 
-    if (!phoneCountryCode || !/^\+\d{1,4}$/.test(phoneCountryCode)) e.phoneCountryCode = "Select a country code.";
+    const ccErr = describeCountryCodeError(phoneCountryCode, COUNTRY_CODES);
+    if (ccErr) e.phoneCountryCode = ccErr;
     if (!phoneNumber) e.phoneNumber = "Mobile number is required.";
-    else if (!isValidPhoneForCountry(phoneCountryCode, phoneNumber))
-      e.phoneNumber = "Enter a valid mobile number for the selected country.";
+    else if (!ccErr && !isValidPhoneForCountry(phoneCountryCode, phoneNumber))
+      e.phoneNumber =
+        "This number doesn’t look valid for that country calling code. Check digits and length, or select the matching country.";
 
     return e;
   };
@@ -278,7 +368,11 @@ export default function AccountPanel() {
   useEffect(() => {
     loadPortalInfo();
     loadBillingInfo();
-  }, [loadPortalInfo]);
+  }, [loadPortalInfo, loadBillingInfo]);
+
+  const sameAsCompanyBilling = Boolean(billingInfo?.sameAsCompany ?? true);
+  const effectiveBillingName = sameAsCompanyBilling ? (portalInfo?.companyName || "") : (billingInfo?.billingName || "");
+  const effectiveBillingAddress = sameAsCompanyBilling ? (portalInfo?.address || "") : (billingInfo?.billingAddress || "");
 
   const handleImage = (e) => {
     const file = e.target.files?.[0];
@@ -332,6 +426,8 @@ export default function AccountPanel() {
     );
   }
 
+  const portalLiveUi = portalInfo ? portalLiveDisplay(portalInfo) : null
+
   return (
     <div>
       {isUploading && (
@@ -346,9 +442,40 @@ export default function AccountPanel() {
               <div className="bg-gradient-to-r from-sky-500 to-cyan-600 px-5 py-4 text-white">
                 <p className="text-xs font-bold uppercase tracking-wide text-white/90">Your live space</p>
                 <p className="mt-1 text-lg font-bold">You&apos;re on Edukify</p>
-                <span className="mt-2 inline-block rounded-full bg-white/25 px-3 py-0.5 text-xs font-semibold backdrop-blur-sm">
-                  {portalInfo.subscription || "Trial"} plan
-                </span>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="inline-block rounded-full bg-white/25 px-3 py-0.5 text-xs font-semibold backdrop-blur-sm">
+                    {portalInfo.planStatus || portalInfo.subscription || "Trial"} plan
+                  </span>
+                  <span
+                    className="pointer-events-none flex select-none items-center gap-2 text-xs font-semibold text-white/80 opacity-70"
+                    aria-disabled="true"
+                    title="Set by Edukify admin only. You cannot change this here."
+                  >
+                    <span className="text-white/70">Live</span>
+                    <span className="flex flex-col items-center gap-0.5">
+                      <span
+                        role="img"
+                        aria-label={
+                          portalLiveUi?.on
+                            ? "Live on (YES), read-only"
+                            : "Live off (NO), read-only"
+                        }
+                        className={`relative inline-block h-6 w-11 rounded-full ${
+                          portalLiveUi?.on ? "bg-white/35" : "bg-white/20"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white/90 shadow ${
+                            portalLiveUi?.on ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </span>
+                      <span className="text-[10px] font-semibold tabular-nums text-white/75">
+                        {portalLiveUi?.text ?? "NO"}
+                      </span>
+                    </span>
+                  </span>
+                </div>
               </div>
               <div className="space-y-3 p-5">
                 <a
@@ -574,33 +701,67 @@ export default function AccountPanel() {
           </div>
 
           <div className="mt-10 w-full bg-slate-100 rounded-tr-3xl rounded-br-3xl rounded-bl-3xl py-7 px-10 sm:px-14">
-            <p className="text-sky-600 text-lg font-semibold">Billing details</p>
-            <p className="mt-1 text-sm text-slate-500">
-              Used for invoices/receipts. If you choose “same as company” during checkout, these match company contact.
-            </p>
-            {billingInfo && (billingInfo.billingName || billingInfo.billingEmail || billingInfo.billingPhone || billingInfo.billingAddress || billingInfo.billingGstNo) ? (
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sky-600 text-lg font-semibold">Billing details</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Used for invoices/receipts. If you choose “same as company” during checkout, these match company contact.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => (billingEditOpen ? setBillingEditOpen(false) : openBillingEdit())}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <i className={`ri-${billingEditOpen ? "close-line" : "edit-2-line"} text-base text-sky-600`} />
+                {billingEditOpen ? "Cancel" : "Edit"}
+              </button>
+            </div>
+            {billingEditOpen ? (
+              <div className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-1">Name</p>
+                  <input
+                    value={billingForm.billingName}
+                    onChange={(e) => setBillingForm((p) => ({ ...p, billingName: e.target.value }))}
+                    className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${
+                      billingErrors.billingName ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"
+                    }`}
+                  />
+                  {billingErrors.billingName ? <p className="mt-1 text-xs font-medium text-red-600">{billingErrors.billingName}</p> : null}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-600 mb-1">Address</p>
+                  <textarea
+                    value={billingForm.billingAddress}
+                    onChange={(e) => setBillingForm((p) => ({ ...p, billingAddress: e.target.value }))}
+                    className={`min-h-[42px] w-full resize-y rounded-xl border px-3 py-2 text-sm outline-none ${
+                      billingErrors.billingAddress ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"
+                    }`}
+                  />
+                  {billingErrors.billingAddress ? <p className="mt-1 text-xs font-medium text-red-600">{billingErrors.billingAddress}</p> : null}
+                </div>
+
+                <div className="sm:col-span-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={saveBilling}
+                    disabled={billingSubmitting}
+                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (String(effectiveBillingName).trim() || String(effectiveBillingAddress).trim()) ? (
               <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
                 <div>
                   <dt className="font-semibold text-slate-600">Name</dt>
-                  <dd className="mt-0.5 text-slate-900">{billingInfo.billingName?.trim() || "—"}</dd>
+                  <dd className="mt-0.5 text-slate-900">{String(effectiveBillingName).trim() || "—"}</dd>
                 </div>
                 <div>
-                  <dt className="font-semibold text-slate-600">Phone</dt>
-                  <dd className="mt-0.5 text-slate-900">{billingInfo.billingPhone?.trim() || "—"}</dd>
-                </div>
-                <div>
-                  <dt className="font-semibold text-slate-600">Email</dt>
-                  <dd className="mt-0.5 break-all text-slate-900">{billingInfo.billingEmail?.trim() || "—"}</dd>
-                </div>
-                <div>
-                  <dt className="font-semibold text-slate-600">GST (optional)</dt>
-                  <dd className="mt-0.5 text-slate-900">{billingInfo.billingGstNo?.trim() || "—"}</dd>
-                </div>
-                <div className="sm:col-span-2">
                   <dt className="font-semibold text-slate-600">Address</dt>
-                  <dd className="mt-0.5 whitespace-pre-wrap text-slate-900">
-                    {billingInfo.billingAddress?.trim() || "—"}
-                  </dd>
+                  <dd className="mt-0.5 whitespace-pre-wrap text-slate-900">{String(effectiveBillingAddress).trim() || "—"}</dd>
                 </div>
               </dl>
             ) : (
@@ -608,6 +769,57 @@ export default function AccountPanel() {
                 Not set yet. It will be saved when you complete checkout in{" "}
                 <span className="font-semibold">Buy Now</span>.
               </p>
+            )}
+          </div>
+
+          <div className="mt-6 w-full bg-slate-100 rounded-tr-3xl rounded-br-3xl rounded-bl-3xl py-6 px-10 sm:px-14">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sky-600 text-lg font-semibold">GST</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Optional. This GST number is used on invoices if provided.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => (gstEditOpen ? setGstEditOpen(false) : openGstEdit())}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <i className={`ri-${gstEditOpen ? "close-line" : "edit-2-line"} text-base text-sky-600`} />
+                {gstEditOpen ? "Cancel" : "Edit"}
+              </button>
+            </div>
+
+            {gstEditOpen ? (
+              <div className="mt-5">
+                <p className="text-xs font-semibold text-slate-600 mb-1">GST (optional)</p>
+                <input
+                  value={gstForm.billingGstNo}
+                  onChange={(e) => setGstForm({ billingGstNo: e.target.value })}
+                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none ${
+                    gstError ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"
+                  }`}
+                />
+                {gstError ? <p className="mt-1 text-xs font-medium text-red-600">{gstError}</p> : null}
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={saveGst}
+                    disabled={gstSubmitting}
+                    className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl bg-white px-5 py-4 shadow-sm">
+                <p className="text-xs font-semibold text-slate-600">GST (optional)</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {billingInfo?.billingGstNo?.trim() || "—"}
+                </p>
+              </div>
             )}
           </div>
 

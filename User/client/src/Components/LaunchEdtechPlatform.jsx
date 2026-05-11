@@ -3,7 +3,10 @@ import { Link } from "react-router-dom";
 import api from "../api";
 import { decodeToken } from "../authConfig";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
+import { getApiErrorMessage } from "../utils/authPayload";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { portalLiveDisplay } from "../utils/portalLiveUtils";
+import { describeCountryCodeError } from "../utils/phoneCountryValidation";
 
 const BASE_DOMAIN = "edukify.com";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -346,6 +349,10 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [portal, setPortal] = useState(null);
+  const [launchGateRequired, setLaunchGateRequired] = useState(false);
+  const [launchCode, setLaunchCode] = useState("");
+  const [launchCodeError, setLaunchCodeError] = useState("");
+  const [gateSubmitting, setGateSubmitting] = useState(false);
 
   const [errors, setErrors] = useState({});
 
@@ -375,6 +382,15 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
       if (err?.response?.status === 404) {
         setPortal(null);
         onPortalPresenceChange?.(false);
+        try {
+          const gRes = await api.get("/clients/launch-gate");
+          const req = Boolean(gRes.data?.launchGateRequired);
+          setLaunchGateRequired(req);
+          setStep(req ? 0 : 1);
+        } catch {
+          setLaunchGateRequired(false);
+          setStep(1);
+        }
       } else {
         showErrorToast(err?.response?.data?.message || "Something went wrong. Please try again.");
       }
@@ -428,9 +444,13 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
     if (!role) e.roleInCompany = "Your role in company is required.";
     if (!email) e.email = "Email is required.";
     else if (!EMAIL_RE.test(email)) e.email = "Please enter a valid email address.";
-    if (!isValidE164CountryCode(cc)) e.phoneCountryCode = "Please select a valid country code.";
+    const ccMsg = describeCountryCodeError(cc, COUNTRY_CODES);
+    if (ccMsg) e.phoneCountryCode = ccMsg;
     if (!phone) e.phoneNumber = "Mobile number is required.";
-    else if (!isValidPhoneForCountry(cc, phone)) e.phoneNumber = "Please enter a valid mobile number for the selected country.";
+    else if (!ccMsg && !isValidPhoneForCountry(cc, phone)) {
+      e.phoneNumber =
+        "This mobile number doesn’t look valid for the selected country calling code. Check the number length and digits, or verify you picked the right country.";
+    }
 
     return e;
   };
@@ -444,6 +464,29 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
       delete copy[key];
       return copy;
     });
+  };
+
+  const handleLaunchGateContinue = async () => {
+    const trimmed = launchCode.trim();
+    if (!trimmed) {
+      setLaunchCodeError("Enter the launch code your Edukify administrator shared with you.");
+      return;
+    }
+    setLaunchCodeError("");
+    setGateSubmitting(true);
+    try {
+      await api.post("/clients/launch-gate/verify", { launchCode: trimmed });
+      setLaunchCodeError("");
+      setStep(1);
+    } catch (err) {
+      const st = err?.response?.status;
+      const msg = getApiErrorMessage(err);
+      setLaunchCodeError(
+        st === 403 || /^incorrect launch code/i.test(msg) ? "Incorrect launch code." : msg,
+      );
+    } finally {
+      setGateSubmitting(false);
+    }
   };
 
   const handleFormNext = async () => {
@@ -467,7 +510,7 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
     try {
       const email = String(form.email ?? "").trim();
       const phone = `${String(form.phoneCountryCode ?? "").trim()} ${normalizeDigits(form.phoneNumber)}`.trim();
-      const res = await api.post("/clients/launch", {
+      const launchPayload = {
         contactPersonName: form.contactPersonName.trim(),
         companyName: form.companyName.trim(),
         roleInCompany: form.roleInCompany.trim(),
@@ -475,18 +518,27 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
         phone,
         email,
         subdomain: subdomain.trim(),
-      });
+      };
+      if (launchGateRequired) {
+        launchPayload.launchCode = launchCode.trim();
+      }
+      const res = await api.post("/clients/launch", launchPayload);
       setPortal(res.data);
       onPortalPresenceChange?.(true);
       showSuccessToast("You're live on Edukify — welcome aboard!");
       setStep(3);
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        (typeof err?.response?.data === "string" ? err.response.data : null) ||
-        err?.message ||
-        "Something went wrong. Try again or pick a different site name.";
-      showErrorToast(String(msg));
+      const msg = getApiErrorMessage(err);
+      const st = err?.response?.status;
+      if (launchGateRequired && (st === 403 || /launch code/i.test(msg))) {
+        setLaunchCode("");
+        setStep(0);
+        setLaunchCodeError(
+          st === 403 || /^incorrect launch code/i.test(msg) ? "Incorrect launch code." : msg,
+        );
+      } else {
+        showErrorToast(msg);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -521,25 +573,34 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
         : null;
     const allocatedLabel = allocatedMb != null ? `${Math.round(allocatedMb)} MB` : "—";
 
-    const subNormalized = String(portal.subscription || "Trial").trim();
-    const isTrial =
-      !subNormalized || subNormalized.toLowerCase() === "trial";
+    const planLabel = portal.planStatus || portal.subscription || "Trial"
+    const planLc = String(planLabel).toLowerCase()
+    const planBadgeClass = planLc.endsWith("expired")
+      ? "bg-gray-200 text-gray-800"
+      : planLc === "trial" ||
+          planLc.startsWith("trial_") ||
+          planLc.startsWith("trial ") ||
+          planLc.startsWith("trial-")
+        ? "bg-sky-500 text-white"
+        : "bg-amber-100 text-amber-900"
     const expiryDisplay =
       portal.trialExpiresOn ? formatTrialExpiryIso(portal.trialExpiresOn) : "—";
 
-    const spaceLeft = formatSpaceLeftMb(allocatedMb, portal.storageUsedBytes);
+    const spaceLeft = formatSpaceLeftMb(allocatedMb, portal.storageUsedBytes)
+    const { on: liveOn, text: liveText } = portalLiveDisplay(portal)
 
     return (
       <div className="mx-auto w-full max-w-none overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl shadow-sky-900/10">
         <div className="min-w-0 overflow-x-auto border-b border-gray-200">
-          <table className="w-full table-fixed border-collapse text-sm">
+          <table className="w-full min-w-[720px] table-fixed border-collapse text-sm">
             <colgroup>
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "12%" }} />
               <col style={{ width: "11%" }} />
               <col style={{ width: "11%" }} />
-              <col style={{ width: "14%" }} />
-              <col style={{ width: "40%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "7%" }} />
+              <col style={{ width: "38%" }} />
             </colgroup>
             <thead className="border-b border-gray-200 bg-[#f9fafb] text-left text-gray-600">
               <tr>
@@ -547,8 +608,14 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
                 <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Expiration</th>
                 <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Space assigned</th>
                 <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Space left</th>
-                <th className="py-2.5 pr-8 pl-2 font-semibold whitespace-nowrap">Plan</th>
-                <th className="py-2.5 pr-3 pl-8 font-semibold">Links</th>
+                <th className="py-2.5 pr-6 pl-2 font-semibold whitespace-nowrap">Plan</th>
+                <th
+                  className="py-2.5 px-1 text-center font-semibold whitespace-nowrap border-l border-gray-200 text-slate-500"
+                  title="Portal live (YES/NO), set by Edukify admin only. Shown for your information."
+                >
+                  Live
+                </th>
+                <th className="py-2.5 pr-3 pl-6 font-semibold border-l border-gray-100">Links</th>
               </tr>
             </thead>
             <tbody>
@@ -561,23 +628,47 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
                 <td className="py-5 px-2 align-top whitespace-nowrap font-medium text-slate-800 text-xs sm:text-sm">
                   {spaceLeft}
                 </td>
-                <td className="py-5 pr-10 pl-2 align-top whitespace-nowrap">
+                <td className="py-5 pr-8 pl-2 align-top whitespace-nowrap">
                   <div className="flex flex-col items-start gap-2">
-                    <span className="inline-flex rounded-full bg-sky-500 px-2.5 py-0.5 text-xs font-bold text-white shadow-sm">
-                      {portal.subscription || "Trial"}
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-bold shadow-sm ${planBadgeClass}`}
+                    >
+                      {planLabel}
                     </span>
-                    {isTrial ? (
-                      <Link
-                        to="/account/upgrade-plans"
-                        className="inline-flex items-center gap-0.5 text-xs font-semibold text-sky-600 underline-offset-2 hover:text-sky-800 hover:underline"
-                      >
-                        <i className="ri-shopping-bag-3-line text-sm" aria-hidden />
-                        Upgrade Plan
-                      </Link>
-                    ) : null}
+                    <Link
+                      to="/account/upgrade-plans"
+                      className="inline-flex items-center gap-0.5 text-xs font-semibold text-sky-600 underline-offset-2 hover:text-sky-800 hover:underline"
+                    >
+                      <i className="ri-shopping-bag-3-line text-sm" aria-hidden />
+                      Upgrade Plan
+                    </Link>
                   </div>
                 </td>
-                <td className="py-5 pr-3 pl-8 align-top md:pl-10">
+                <td className="py-5 px-1 text-center align-middle border-l border-gray-200 bg-slate-50/90">
+                  <div
+                    className="pointer-events-none mx-auto flex max-w-[5.5rem] select-none flex-col items-center gap-1 opacity-65"
+                    aria-disabled="true"
+                    role="group"
+                    aria-label={liveOn ? "Live on (YES), read-only" : "Live off (NO), read-only"}
+                    title="Set by Edukify admin only. You cannot change this here."
+                  >
+                    <div
+                      className={`relative h-7 w-11 rounded-full ${
+                        liveOn ? "bg-slate-400" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow-sm ${
+                          liveOn ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </div>
+                    <span className="text-[10px] font-semibold tabular-nums tracking-wide text-slate-500">
+                      {liveText}
+                    </span>
+                  </div>
+                </td>
+                <td className="py-5 pr-3 pl-6 align-top md:pl-8 border-l border-gray-100">
                   <div className="flex flex-col gap-4">
                     <div>
                       <p className="text-xs font-bold text-gray-900">Website</p>
@@ -637,6 +728,61 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
 
   return (
     <div className="mx-auto max-w-2xl">
+      {step === 0 && launchGateRequired && (
+        <div className="flex flex-col overflow-hidden rounded-3xl border border-sky-100/80 bg-white shadow-xl shadow-sky-900/10 md:flex-row md:items-stretch">
+          <div className="flex shrink-0 flex-col md:w-[38%] md:min-w-[220px] md:max-w-[280px] md:self-stretch">
+            <LaunchHero
+              splitLayout
+              extraCompactSplit
+              step={0}
+              highlight="Access"
+              title="Launch code required"
+              subtitle="Edukify is not open for self-serve launches yet, or your account needs a code. Enter the code you were given, then continue."
+            />
+          </div>
+          <div className="flex flex-1 flex-col justify-center gap-4 border-t border-sky-100/60 bg-white px-5 py-6 md:border-l md:border-t-0 md:px-6 md:py-7 rounded-b-3xl md:rounded-bl-none md:rounded-br-3xl md:rounded-tr-3xl">
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Launch code</span>
+              <input
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                className={`mt-1.5 w-full rounded-xl border bg-white px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 ${
+                  launchCodeError
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+                    : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+                }`}
+                value={launchCode}
+                onChange={(e) => {
+                  setLaunchCode(e.target.value)
+                  if (launchCodeError) setLaunchCodeError("")
+                }}
+                placeholder="Paste or type the code from your administrator"
+                disabled={gateSubmitting}
+                aria-invalid={Boolean(launchCodeError)}
+                aria-describedby={launchCodeError ? "launch-code-error" : undefined}
+              />
+              {launchCodeError ? (
+                <p id="launch-code-error" className="mt-2 text-sm font-medium text-red-600">
+                  {launchCodeError}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Use the exact code shown in your Edukify admin under Settings → Launch code.
+                </p>
+              )}
+            </label>
+            <button
+              type="button"
+              onClick={handleLaunchGateContinue}
+              disabled={gateSubmitting}
+              className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-cyan-600 py-3 text-sm font-bold text-white shadow-md shadow-sky-500/25 transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60 md:w-auto md:px-8"
+            >
+              {gateSubmitting ? "Checking…" : "Continue"}
+            </button>
+          </div>
+        </div>
+      )}
       {step === 1 && (
         <div className="flex flex-col overflow-hidden rounded-3xl border border-sky-100/80 bg-white shadow-xl shadow-sky-900/10 md:flex-row md:items-stretch">
           <div className="flex shrink-0 flex-col md:w-[38%] md:min-w-[220px] md:max-w-[280px] md:self-stretch">

@@ -2,6 +2,7 @@ package com.RankwellClient.Controller;
 
 import java.util.Map;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,20 +12,24 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.RankwellClient.dto.LaunchPortalRequest;
 import com.RankwellClient.dto.PortalLaunchResponse;
 import com.RankwellClient.dto.UpdatePortalRequest;
 import com.RankwellClient.services.EdukifyClientService;
+import com.RankwellClient.services.LaunchGateService;
 
 @RestController
 @RequestMapping("/clients")
 public class EdukifyClientController {
 
 	private final EdukifyClientService eduClientService;
+	private final LaunchGateService launchGateService;
 
-	public EdukifyClientController(EdukifyClientService eduClientService) {
+	public EdukifyClientController(EdukifyClientService eduClientService, LaunchGateService launchGateService) {
 		this.eduClientService = eduClientService;
+		this.launchGateService = launchGateService;
 	}
 
 	@GetMapping("/me")
@@ -33,6 +38,26 @@ public class EdukifyClientController {
 		return eduClientService.findForUser(userId)
 				.map(ResponseEntity::ok)
 				.orElse(ResponseEntity.notFound().build());
+	}
+
+	@GetMapping("/launch-gate")
+	public Map<String, Boolean> launchGateStatus(Authentication authentication) {
+		EdukifyClientService.userIdFromAuth(authentication);
+		return Map.of("launchGateRequired", launchGateService.isLaunchGateActive());
+	}
+
+	@PostMapping("/launch-gate/verify")
+	public ResponseEntity<?> verifyLaunchGate(Authentication authentication, @RequestBody Map<String, String> body) {
+		EdukifyClientService.userIdFromAuth(authentication);
+		if (!launchGateService.isLaunchGateActive()) {
+			return ResponseEntity.noContent().build();
+		}
+		String code = body == null ? null : body.get("launchCode");
+		if (!launchGateService.matchesSubmittedCode(code)) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN)
+					.body(Map.of("message", "Incorrect launch code."));
+		}
+		return ResponseEntity.noContent().build();
 	}
 
 	@PostMapping("/launch")

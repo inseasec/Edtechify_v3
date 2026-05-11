@@ -29,10 +29,11 @@ const PaymentAccount = () => {
 
         } catch (error) {
             console.error('Error Fetching from API:', error);
-            if (status = 404) {
-                setMsg("Alert: No Payment Configuration found!")
-                // toast.error("No Payment Configuration found")
-            }
+            const status = error?.response?.status;
+            if (status === 404) setMsg("Alert: No Payment Configuration found!");
+            else if (status === 403) setMsg("Access denied. Only Super Admin can update payment configuration.");
+            else if (status === 401) setMsg("Please sign in again to update payment configuration.");
+            else setMsg("Could not load payment configuration.");
         } finally {
             setLoading(false);
         }
@@ -48,7 +49,15 @@ const PaymentAccount = () => {
             showSuccessToast("Api credentials Saved Successfully");
             setMsg(" ")
         } catch (error) {
-            showErrorToast(error?.response?.data?.message || 'Error in saving Api credentials');
+            const status = error?.response?.status;
+            const data = error?.response?.data;
+            const backendMsg =
+              (data && typeof data === "object" && data.message) ? String(data.message)
+              : (typeof data === "string" ? data : null);
+
+            if (status === 403) showErrorToast(backendMsg || "Access denied. Only Super Admin can update payment configuration.");
+            else if (status === 401) showErrorToast("Please sign in again to update payment configuration.");
+            else showErrorToast(backendMsg || 'Error in saving API credentials');
         } finally {
             setSaving(false);
         }
