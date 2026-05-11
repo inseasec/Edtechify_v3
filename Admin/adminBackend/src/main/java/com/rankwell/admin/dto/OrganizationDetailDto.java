@@ -5,6 +5,7 @@ import com.rankwell.admin.entity.OrgHome;
 import com.rankwell.admin.entity.OrgTeamGallery;
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
 import com.rankwell.admin.dto.OrgAddressDTO;
 
 public class OrganizationDetailDto {
@@ -17,6 +18,10 @@ public class OrganizationDetailDto {
 	private String orgPhone;
 	private String orgEmail; 
 	private String orgLogo;
+
+	/** Paths hidden from public navbar/footer (e.g. ["/gallery"]). Home (/) is never configurable here. */
+	private List<String> navbarHiddenPaths = new ArrayList<>();
+
 	// private String title;
 	// private  String description;
 	
@@ -98,6 +103,15 @@ public class OrganizationDetailDto {
 	public void setOrgLogo(String orgLogo) {
 		this.orgLogo = orgLogo;
 	}
+
+	public List<String> getNavbarHiddenPaths() {
+		return navbarHiddenPaths;
+	}
+
+	public void setNavbarHiddenPaths(List<String> navbarHiddenPaths) {
+		this.navbarHiddenPaths = navbarHiddenPaths == null ? new ArrayList<>() : navbarHiddenPaths;
+	}
+
 	public OrgAboutUsDTO getOrgAboutUs() {
 		return orgAboutUs;
 	}

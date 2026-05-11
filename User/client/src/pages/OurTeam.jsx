@@ -77,7 +77,7 @@ export default function OurTeam() {
           <p className="mx-auto max-w-xl text-[var(--text)]">
             Product and marketing imagery lives on the{" "}
             <Link to="/gallery" className="font-semibold text-sky-700 underline-offset-4 hover:underline">
-              Product gallery
+              Gallery
             </Link>{" "}
             page.
           </p>

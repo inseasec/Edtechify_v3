@@ -404,7 +404,7 @@ export default function UserPanelHome() {
             <div className="mx-auto max-w-4xl">
               <div className="mb-2 flex items-center gap-2 text-slate-800">
                 <Image className="h-5 w-5 shrink-0 text-sky-600" />
-                <h2 className="text-lg font-semibold">Product gallery (public site)</h2>
+                <h2 className="text-lg font-semibold">Gallery (public site)</h2>
               </div>
               <p className="mb-4 text-sm text-slate-600">
                 Heading and <strong className="font-semibold text-slate-800">product</strong> images for{" "}
@@ -414,7 +414,7 @@ export default function UserPanelHome() {
               </p>
               <label className="block max-w-xl">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Product gallery page title
+                  Gallery page title
                 </span>
                 <input
                   type="text"
@@ -422,12 +422,12 @@ export default function UserPanelHome() {
                   value={formData.orgGallery?.galleryTitle ?? ''}
                   onChange={handleTextChange}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-                  placeholder="e.g. Product gallery"
+                  placeholder="e.g. Gallery"
                 />
               </label>
               <div className="mt-4">
                 <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Replace product gallery images
+                  Replace Gallery images
                 </span>
                 <input
                   type="file"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import menus from "../menu.js";
 import axios from "axios";
@@ -20,6 +20,8 @@ export default function Navbar() {
   const [orgName, setOrgName] = useState("");
   /** When false, show a neutral placeholder — avoids Edukify flashing before org API returns a custom logo. */
   const [orgBrandingReady, setOrgBrandingReady] = useState(false);
+  /** Public nav paths hidden via admin Settings → Pages */
+  const [navbarHiddenPaths, setNavbarHiddenPaths] = useState([]);
 
   const desktopAccountRef = useRef(null);
   const mobileAccountRef = useRef(null);
@@ -66,6 +68,7 @@ export default function Navbar() {
       if (!apiBase) {
         setOrgLogo("");
         setOrgName("");
+        setNavbarHiddenPaths([]);
         setOrgBrandingReady(true);
         return;
       }
@@ -75,9 +78,11 @@ export default function Navbar() {
         });
         setOrgLogo(res.data?.orgLogo ?? "");
         setOrgName(res.data?.orgName ?? "");
+        setNavbarHiddenPaths(Array.isArray(res.data?.navbarHiddenPaths) ? res.data.navbarHiddenPaths : []);
       } catch {
         setOrgLogo("");
         setOrgName("");
+        setNavbarHiddenPaths([]);
       } finally {
         setOrgBrandingReady(true);
       }
@@ -178,6 +183,13 @@ export default function Navbar() {
   const navLinkClass =
     "rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-sky-50 hover:text-sky-700";
 
+  const visibleMenus = useMemo(() => {
+    const hidden = new Set(
+      Array.isArray(navbarHiddenPaths) ? navbarHiddenPaths.map((p) => String(p).trim()) : [],
+    );
+    return menus.filter((item) => !hidden.has(item.mLink));
+  }, [navbarHiddenPaths]);
+
   return (
     <>
       {/* Desktop: compact light bar — distinct from full-width dark tenant headers */}
@@ -201,7 +213,7 @@ export default function Navbar() {
           </Link>
 
           <nav className="hidden flex-1 justify-center gap-1 md:flex lg:gap-2">
-            {menus.map((item, index) => (
+            {visibleMenus.map((item, index) => (
               <Link key={index} to={item.mLink} className={navLinkClass}>
                 {item.mName}
               </Link>
@@ -294,7 +306,7 @@ export default function Navbar() {
         {menuDropDown && (
           <div className="border-t border-sky-100 bg-white px-4 pb-4 pt-2 shadow-inner">
             <div className="flex flex-col gap-1 rounded-xl bg-sky-50/80 p-2">
-              {menus.map((item, index) => (
+              {visibleMenus.map((item, index) => (
                 <Link
                   key={index}
                   to={item.mLink}

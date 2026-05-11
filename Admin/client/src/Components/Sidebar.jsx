@@ -110,7 +110,7 @@ const Sidebar = () => {
   }, [location.pathname]);
 
   const settingsLinks = [
-    // { to: `${base}/company-details/pages`, label: 'Pages Company Details' },
+    { to: `${base}/company-details/pages-visibility`, label: 'Pages' },
     { to: `${base}/company-details/smtp-server-settings`, label: 'SMTP Server Settings' },
     { to: `${base}/company-details/sms-service-settings`, label: 'SMS Service Settings' },
     { to: `${base}/company-details/account-settings`, label: 'Payment Gateway Settings' },
@@ -149,6 +149,7 @@ const Sidebar = () => {
   const mainItems = [
     { to: `${base}/admin`, label: 'Admin' },
     { to: `${base}/clients`, label: 'Clients' },
+    { to: `${base}/unused-accounts`, label: 'Unused Accounts' },
   ];
 
   return (

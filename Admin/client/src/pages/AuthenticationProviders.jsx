@@ -4,6 +4,23 @@ import MailServerConfigInner from '@/components/MailServerConfigInner'
 import SmsServiceConfigInner from '@/components/SmsServiceConfigInner'
 import { DEFAULT_SMTP_INSTRUCTIONS } from '@/constants/userCommMailConstants'
 import { DEFAULT_TWILIO_INSTRUCTIONS } from '@/constants/userCommTwilioConstants'
+import { showErrorToast, showSuccessToast, getApiErrorMessage } from '@/utils/toastUtils'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+const SMTP_TEST_MAIL_KEY = 'SMTP_TEST_MAIL'
+const TWILIO_TEST_SMS_KEY = 'TWILIO_TEST_SMS'
+
+function isPlausiblePhone(raw) {
+  const t = String(raw ?? '').trim()
+  if (!t) return false
+  if (t.startsWith('+')) {
+    const compact = t.replace(/[^\d+]/g, '')
+    return /^\+\d{10,15}$/.test(compact)
+  }
+  const digits = t.replace(/\D/g, '')
+  return digits.length >= 10
+}
 
 const MODES = [
   { id: 'NORMAL', label: 'Normal sign up', help: 'Email + password only (no OTP, no mobile).' },
@@ -63,6 +80,17 @@ export default function AuthenticationProviders() {
   const [message, setMessage] = useState(null)
   const [error, setError] = useState(null)
 
+  const [smtpTestRecipient, setSmtpTestRecipient] = useState('')
+  const [smtpTestSubject, setSmtpTestSubject] = useState('Edukify SMTP test')
+  const [smtpTestOtp, setSmtpTestOtp] = useState('')
+  const [smtpTestSending, setSmtpTestSending] = useState(false)
+  const [smtpTestFeedback, setSmtpTestFeedback] = useState(null)
+
+  const [twilioTestPhone, setTwilioTestPhone] = useState('')
+  const [twilioTestOtp, setTwilioTestOtp] = useState('')
+  const [twilioTestSending, setTwilioTestSending] = useState(false)
+  const [twilioTestFeedback, setTwilioTestFeedback] = useState(null)
+
   useEffect(() => {
     let mounted = true
     setLoading(true)
@@ -116,6 +144,84 @@ export default function AuthenticationProviders() {
       setError(e?.response?.data || e?.message || 'Failed to save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleTestMail = async () => {
+    const to = smtpTestRecipient.trim()
+    if (!EMAIL_RE.test(to)) {
+      showErrorToast('Enter a valid recipient email address.')
+      return
+    }
+    if (!smtpTestOtp.trim()) {
+      showErrorToast('Enter a static OTP to include in the test email body.')
+      return
+    }
+    setSmtpTestFeedback(null)
+    setSmtpTestSending(true)
+    try {
+      const subject = smtpTestSubject.trim() || 'Edukify SMTP test'
+      const res = await api.post('/admin/user-comm-config', {
+        ...comm,
+        [SMTP_TEST_MAIL_KEY]: {
+          recipientEmail: to,
+          subject,
+          staticOtp: smtpTestOtp.trim(),
+        },
+      })
+      const backendMsg =
+        typeof res?.data?.message === 'string' && res.data.message.trim().length > 0
+          ? res.data.message.trim()
+          : null
+      const okText =
+        backendMsg ||
+        'Test email sent successfully. Check the recipient inbox (and spam folder).'
+      setSmtpTestFeedback({ kind: 'success', text: okText })
+      showSuccessToast(okText)
+    } catch (e) {
+      const errText = getApiErrorMessage(e, 'Test email failed')
+      setSmtpTestFeedback({ kind: 'error', text: errText })
+      showErrorToast(errText)
+    } finally {
+      setSmtpTestSending(false)
+    }
+  }
+
+  const handleTestSms = async () => {
+    const phone = twilioTestPhone.trim()
+    if (!isPlausiblePhone(phone)) {
+      showErrorToast('Enter a valid phone number (E.164 like +9198XXXXXXXX or at least 10 digits).')
+      return
+    }
+    if (!twilioTestOtp.trim()) {
+      showErrorToast('Enter a static OTP to include in the test SMS.')
+      return
+    }
+    setTwilioTestFeedback(null)
+    setTwilioTestSending(true)
+    try {
+      const res = await api.post('/admin/user-comm-config', {
+        ...comm,
+        [TWILIO_TEST_SMS_KEY]: {
+          recipientPhone: phone,
+          staticOtp: twilioTestOtp.trim(),
+        },
+      })
+      const backendMsg =
+        typeof res?.data?.message === 'string' && res.data.message.trim().length > 0
+          ? res.data.message.trim()
+          : null
+      const okText =
+        backendMsg ||
+        'Test SMS sent successfully. On a Twilio trial, the recipient must be a verified number in Twilio.'
+      setTwilioTestFeedback({ kind: 'success', text: okText })
+      showSuccessToast(okText)
+    } catch (e) {
+      const errText = getApiErrorMessage(e, 'Test SMS failed')
+      setTwilioTestFeedback({ kind: 'error', text: errText })
+      showErrorToast(errText)
+    } finally {
+      setTwilioTestSending(false)
     }
   }
 
@@ -213,6 +319,75 @@ export default function AuthenticationProviders() {
                         </summary>
 
                         <MailServerConfigInner comm={comm} setComm={setComm} />
+
+                        <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50/90 p-4">
+                          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-900 outline-none [&::-webkit-details-marker]:hidden">
+                            <span className="underline decoration-slate-300 underline-offset-2 hover:decoration-slate-400">
+                              Test mail configuration
+                            </span>
+                          </summary>
+                          <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                            Same as{' '}
+                            <span className="font-mono">POST /admin/user-comm-config</span> test payload; nothing is saved.
+                            Masked SMTP password uses the stored value.
+                          </p>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-xs font-medium text-slate-700 sm:col-span-2">
+                              Recipient email
+                              <input
+                                type="email"
+                                autoComplete="email"
+                                value={smtpTestRecipient}
+                                onChange={(e) => setSmtpTestRecipient(e.target.value)}
+                                placeholder="you@example.com"
+                                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
+                              Subject
+                              <input
+                                type="text"
+                                value={smtpTestSubject}
+                                onChange={(e) => setSmtpTestSubject(e.target.value)}
+                                placeholder="Edukify SMTP test"
+                                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-xs font-medium text-slate-700">
+                              Static OTP (in email body)
+                              <input
+                                type="text"
+                                value={smtpTestOtp}
+                                onChange={(e) => setSmtpTestOtp(e.target.value)}
+                                placeholder="e.g. 123456"
+                                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                              />
+                            </label>
+                            <div className="flex flex-col gap-2 sm:col-span-2">
+                              <button
+                                type="button"
+                                onClick={() => handleTestMail()}
+                                disabled={smtpTestSending}
+                                className="w-fit rounded-lg border border-slate-800 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {smtpTestSending ? 'Sending…' : 'Send test email'}
+                              </button>
+                              {smtpTestFeedback ? (
+                                <div
+                                  role="status"
+                                  aria-live="polite"
+                                  className={
+                                    smtpTestFeedback.kind === 'success'
+                                      ? 'rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950'
+                                      : 'rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900'
+                                  }
+                                >
+                                  {smtpTestFeedback.text}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </details>
                       </details>
                     ) : null}
 
@@ -241,6 +416,66 @@ export default function AuthenticationProviders() {
                         </summary>
 
                         <SmsServiceConfigInner comm={comm} setComm={setComm} />
+
+                        <details className="mt-4 rounded-lg border border-slate-200 bg-slate-50/90 p-4">
+                          <summary className="cursor-pointer select-none text-sm font-semibold text-slate-900 outline-none [&::-webkit-details-marker]:hidden">
+                            <span className="underline decoration-slate-300 underline-offset-2 hover:decoration-slate-400">
+                              Test SMS configuration (Twilio)
+                            </span>
+                          </summary>
+                          <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                            Same as{' '}
+                            <span className="font-mono">POST /admin/user-comm-config</span> test payload; nothing is saved.
+                            Masked auth token uses the stored value.
+                          </p>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1 text-xs font-medium text-slate-700 sm:col-span-2">
+                              Recipient phone
+                              <input
+                                type="tel"
+                                autoComplete="tel"
+                                value={twilioTestPhone}
+                                onChange={(e) => setTwilioTestPhone(e.target.value)}
+                                placeholder="+9198XXXXXXXX or 10-digit local"
+                                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                              />
+                            </label>
+                            <label className="flex flex-col gap-1 text-xs font-medium text-slate-700 sm:col-span-2">
+                              Static OTP (in SMS body)
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={twilioTestOtp}
+                                onChange={(e) => setTwilioTestOtp(e.target.value)}
+                                placeholder="e.g. 123456"
+                                className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-inner placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                              />
+                            </label>
+                            <div className="flex flex-col gap-2 sm:col-span-2">
+                              <button
+                                type="button"
+                                onClick={() => handleTestSms()}
+                                disabled={twilioTestSending}
+                                className="w-fit rounded-lg border border-slate-800 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {twilioTestSending ? 'Sending…' : 'Send test SMS'}
+                              </button>
+                              {twilioTestFeedback ? (
+                                <div
+                                  role="status"
+                                  aria-live="polite"
+                                  className={
+                                    twilioTestFeedback.kind === 'success'
+                                      ? 'rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950'
+                                      : 'rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900'
+                                  }
+                                >
+                                  {twilioTestFeedback.text}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </details>
                       </details>
                     ) : null}
 

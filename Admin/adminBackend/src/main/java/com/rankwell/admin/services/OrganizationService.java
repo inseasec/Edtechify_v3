@@ -45,6 +45,11 @@ public interface OrganizationService {
 
     OrganizationDetailDto getOrganizationDetails();
 
+    /**
+     * Persist which public nav paths are hidden (excluding Home). Only allowed paths are stored.
+     */
+    OrganizationDetailDto updateNavbarHiddenPaths(java.util.List<String> hiddenPaths);
+
      public OrganizationDetail saveOrganization(
             OrganizationDetailDto dto,
             List<MultipartFile> courseVideos,

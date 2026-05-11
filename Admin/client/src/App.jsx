@@ -12,6 +12,7 @@ import SubscriptionPlans from './pages/SubscriptionPlans'
 import SmtpServerSettings from './pages/SmtpServerSettings'
 import SmsServiceSettings from './pages/SmsServiceSettings'
 import LaunchCodeSettings from './pages/LaunchCodeSettings'
+import PagesVisibilitySettings from './pages/PagesVisibilitySettings'
 import CareersPage from './pages/CareersPage'
 import CareersSettingsPanel from './pages/CareersSettingsPanel'
 import CareersVideosPage from './pages/CareersVideosPage'
@@ -19,6 +20,7 @@ import ApplicantDetails from './pages/ApplicantDetails'
 import ChatSupport from './pages/ChatSupport'
 import AdminPage from './pages/AdminPage'
 import AdminStudents from './pages/AdminStudents'
+import UnusedAccounts from './pages/UnusedAccounts'
 import UserPanelHome from './pages/UserPanelHome'
 import UserPanelMyTeam from './pages/UserPanelMyTeam'
 import UserPanelAboutV2 from './pages/UserPanelAboutV2'
@@ -42,6 +44,7 @@ const adminChildRoutes = (
     <Route path="dashboard" element={<Dashboard />} />
     <Route path="admin" element={<AdminPage />} />
     <Route path="clients" element={<AdminStudents />} />
+    <Route path="unused-accounts" element={<UnusedAccounts />} />
     <Route path="company-details/pages" element={<PagesCompanyDetails />} />
     <Route path="company-details/account-settings" element={<AccountSettings />} />
     <Route path="company-details/invoice-settings" element={<InvoiceSettings />} />
@@ -51,6 +54,7 @@ const adminChildRoutes = (
     <Route path="company-details/smtp-server-settings" element={<SmtpServerSettings />} />
     <Route path="company-details/sms-service-settings" element={<SmsServiceSettings />} />
     <Route path="company-details/launch-code-settings" element={<LaunchCodeSettings />} />
+    <Route path="company-details/pages-visibility" element={<PagesVisibilitySettings />} />
     <Route path="settings/career" element={<CareersSettingsPanel />} />
     <Route path="careers/videos" element={<CareersVideosPage />} />
     <Route path="careers/applicant/:applicantId" element={<ApplicantDetails />} />

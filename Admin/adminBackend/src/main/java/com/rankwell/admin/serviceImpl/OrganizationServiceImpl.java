@@ -6,9 +6,11 @@ import java.io.InputStream;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.Set;
 import java.nio.file.StandardCopyOption;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +57,10 @@ import com.rankwell.admin.dto.HeadingRequest;
 import com.rankwell.admin.dto.TermsAndConditionsDto;
 import com.rankwell.admin.entity.OrgAddressEntry;
 import com.rankwell.admin.dto.OrgAddressDTO;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rankwell.admin.util.NavBarConfigurablePaths;
 
  
 @Service
@@ -91,6 +97,8 @@ public class OrganizationServiceImpl implements OrganizationService {
 
 
     private static final String ORG_DATA_DIR = "OrgData";
+
+	private static final ObjectMapper NAV_PATHS_JSON = new ObjectMapper();
 
     public OrganizationServiceImpl(OrganizationRepository organizationRepository,
                                          StoragePathResolver pathResolver){
@@ -590,6 +598,7 @@ public OrganizationDetail saveOrganization(OrganizationDetailDto dto, List<Multi
                 } catch (Exception ignore) {
                     // fallback: never fail details endpoint due to mapper quirks
                 }
+				dto.setNavbarHiddenPaths(parseNavbarHiddenJson(organization.getNavbarHiddenPathsJson()));
                 return dto;
            }
 
@@ -1508,6 +1517,68 @@ public String saveTemplateFile(MultipartFile file, Module module, MediaType type
                     return "terms added";
 
           }
+
+	private static List<String> parseNavbarHiddenJson(String json) {
+		if (json == null || json.isBlank()) {
+			return new ArrayList<>();
+		}
+		try {
+			List<String> raw = NAV_PATHS_JSON.readValue(json, new TypeReference<List<String>>() {
+			});
+			List<String> out = new ArrayList<>();
+			if (raw != null) {
+				for (String p : raw) {
+					String n = normalizeNavPath(p);
+					if (!n.isEmpty() && NavBarConfigurablePaths.ALLOWED.contains(n)) {
+						out.add(n);
+					}
+				}
+			}
+			return out;
+		} catch (Exception e) {
+			return new ArrayList<>();
+		}
+	}
+
+	private static String normalizeNavPath(String p) {
+		if (p == null) {
+			return "";
+		}
+		String s = p.trim();
+		if (s.isEmpty()) {
+			return "";
+		}
+		if (!s.startsWith("/")) {
+			s = "/" + s;
+		}
+		while (s.length() > 1 && s.endsWith("/")) {
+			s = s.substring(0, s.length() - 1);
+		}
+		return s;
+	}
+
+	@Override
+	@Transactional
+	public OrganizationDetailDto updateNavbarHiddenPaths(List<String> hiddenPathsRaw) {
+		OrganizationDetail org = organizationRepository.findFirstByOrderByIdAsc()
+				.orElseThrow(() -> new RuntimeException("No organization details found!"));
+		Set<String> normalized = new LinkedHashSet<>();
+		if (hiddenPathsRaw != null) {
+			for (String p : hiddenPathsRaw) {
+				String n = normalizeNavPath(p);
+				if (NavBarConfigurablePaths.ALLOWED.contains(n)) {
+					normalized.add(n);
+				}
+			}
+		}
+		try {
+			org.setNavbarHiddenPathsJson(NAV_PATHS_JSON.writeValueAsString(new ArrayList<>(normalized)));
+		} catch (JsonProcessingException e) {
+			throw new RuntimeException(e);
+		}
+		organizationRepository.save(org);
+		return getOrganizationDetails();
+	}
 
 		  @Override
 		  public void deleteCourseDeptType(Long id) {

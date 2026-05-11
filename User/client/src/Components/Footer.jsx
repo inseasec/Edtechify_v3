@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
@@ -22,6 +22,15 @@ export default function Footer() {
     enabled: Boolean(adminApiBaseUrl || userApiBaseUrl),
     staleTime: 30_000,
   });
+
+  const footerMenus = useMemo(() => {
+    const hidden = new Set(
+      Array.isArray(organisation?.navbarHiddenPaths)
+        ? organisation.navbarHiddenPaths.map((p) => String(p).trim())
+        : [],
+    );
+    return menus.filter((item) => !hidden.has(item.mLink));
+  }, [organisation]);
 
   if (status === "pending" || !organisation) {
     return (
@@ -87,7 +96,7 @@ export default function Footer() {
             Quick Links
           </h3>
           <div className="mt-1 md:mt-3 text-md md:text-lg text-center md:text-start">
-            {menus.map((item, index) => (
+            {footerMenus.map((item, index) => (
               <li className="list-none mt-1" key={index}>
                 <Link to={item.mLink} className="hover:underline text-sm">
                   {item.mName}

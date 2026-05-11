@@ -848,7 +848,7 @@ export default function UserPanelAbout() {
             <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-gray-600">
               Shown on the public <strong className="font-semibold text-gray-800">About us</strong> page and{" "}
               <strong className="font-semibold text-gray-800">Our Team</strong> (<code className="text-xs">/our-team</code>
-              ). Product images are managed separately under User Panel → Home → Product gallery.
+              ). Product images are managed separately under User Panel → Home → Gallery.
             </p>
             <div className="mt-6 flex justify-center">
               <button

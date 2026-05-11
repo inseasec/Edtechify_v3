@@ -27,7 +27,7 @@ const menus = [{
 },
 
 {
-    mName: "Product gallery",
+    mName: "Gallery",
     mLink: "/gallery"
 },
 {

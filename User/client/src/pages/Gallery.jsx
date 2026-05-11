@@ -49,7 +49,7 @@ export default function Gallery() {
   const title =
     typeof gallery.galleryTitle === "string" && gallery.galleryTitle.trim()
       ? gallery.galleryTitle.trim()
-      : "Product gallery";
+      : "Gallery";
   const images = Array.isArray(gallery.galleryImages) ? gallery.galleryImages : [];
 
   return (
@@ -59,8 +59,8 @@ export default function Gallery() {
           <h1 className="text-3xl sm:text-4xl font-semibold text-[var(--text-h)]">{title}</h1>
           <p className="mt-3 text-[var(--text)] leading-relaxed">
             {images.length > 0
-              ? "Product and marketing images below are managed from the admin (User Panel → Home → Product gallery)."
-              : "Upload product images from the admin under User Panel → Home → Product gallery. Until then, here are layout placeholders."}
+              ? "Product and marketing images below are managed from the admin (User Panel → Home → Gallery)."
+              : "Upload product images from the admin under User Panel → Home → Gallery. Until then, here are layout placeholders."}
           </p>
         </div>
       </header>

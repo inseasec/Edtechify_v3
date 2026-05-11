@@ -40,7 +40,14 @@ public class OrganizationDetail {
 	
 	private String orgEmail;
 	 
-    private String orgLogo;
+	private String orgLogo;
+
+	/**
+	 * JSON array of public nav paths to hide (e.g. ["/gallery"]). Keys must be in
+	 * {@link com.rankwell.admin.util.NavBarConfigurablePaths#ALLOWED}.
+	 */
+	@Column(name = "navbar_hidden_paths_json", columnDefinition = "TEXT")
+	private String navbarHiddenPathsJson;
 
 	
  //  Manage JSON serialization (parent → child only)
@@ -138,6 +145,14 @@ public class OrganizationDetail {
 
 	public void setOrgLogo(String orgLogo) {
 		this.orgLogo = orgLogo;
+	}
+
+	public String getNavbarHiddenPathsJson() {
+		return navbarHiddenPathsJson;
+	}
+
+	public void setNavbarHiddenPathsJson(String navbarHiddenPathsJson) {
+		this.navbarHiddenPathsJson = navbarHiddenPathsJson;
 	}
 
 	public OrgAboutUs getOrgAboutUs() {
