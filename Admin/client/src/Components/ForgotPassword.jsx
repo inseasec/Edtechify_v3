@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Eye, EyeOff } from 'lucide-react';
 import bgImage from '../assets/pexels-fauxels-3184460-1.jpg';
@@ -15,16 +15,22 @@ function getApiErrorMessage(error) {
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialEmail = typeof location.state?.email === 'string' ? location.state.email.trim().toLowerCase() : '';
+  const initialOtpSent = location.state?.otpSent === true && Boolean(initialEmail);
   const baseUrl = window._CONFIG_?.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialOtpSent ? 2 : 1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [infoMessage, setInfoMessage] = useState(
+    initialOtpSent ? 'Enter the verification code sent to your registered email or mobile.' : ''
+  );
 
   const emailNormalized = useMemo(() => String(email ?? '').trim().toLowerCase(), [email]);
 
@@ -46,6 +52,7 @@ export default function ForgotPassword() {
     setBusy(true);
     try {
       await axios.post(`${baseUrl}/admin/password/otp/send`, { email: emailNormalized });
+      setInfoMessage('Enter the verification code sent to your registered email or mobile.');
       setStep(2);
     } catch (e) {
       setError(getApiErrorMessage(e));
@@ -113,9 +120,16 @@ export default function ForgotPassword() {
           style={{ boxShadow: '0px 5px 5px 5px rgba(0.5, 0.5, 0.5, 0.5)' }}
           className="w-[80%] py-6 mt-2 ml-3 md:ml-16 shadow-2xl bg-white rounded-lg"
         >
-          <p className="text-center font-bold text-xl text-slate-900 py-2">Forgot Password</p>
+          <p className="text-center font-bold text-xl text-slate-900 py-2">
+            {step === 2 ? 'Verify OTP' : 'Forgot Password'}
+          </p>
 
           <div className="w-[79%] mx-auto mt-4 space-y-4">
+            {infoMessage && step === 2 && (
+              <p className="text-sm text-gray-700" role="status">
+                {infoMessage}
+              </p>
+            )}
             {error && (
               <p className="text-sm text-red-600" role="alert">
                 {error}
@@ -132,6 +146,7 @@ export default function ForgotPassword() {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   setStep(1);
+                  setInfoMessage('');
                   setOtp('');
                   setNewPassword('');
                   setConfirmPassword('');

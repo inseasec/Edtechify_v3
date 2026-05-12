@@ -12,7 +12,9 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
 
+import com.rankwell.admin.entity.Admins;
 import com.rankwell.admin.entity.UserCommConfig;
+import com.rankwell.admin.repository.AdminRepository;
 import com.rankwell.admin.repository.UserCommConfigRepository;
 
 /**
@@ -35,31 +37,59 @@ public class AdminForgotPasswordOtpService {
 	}
 
 	private final UserCommConfigRepository userCommConfigRepository;
+	private final AdminRepository adminRepository;
+	private final AdminLoginOtpService adminLoginOtpService;
 	private final Map<String, OtpRecord> store = new ConcurrentHashMap<>();
 
 	@Value("${otp.expiry-seconds:300}")
 	private long otpExpirySeconds;
 
-	public AdminForgotPasswordOtpService(UserCommConfigRepository userCommConfigRepository) {
+	public AdminForgotPasswordOtpService(UserCommConfigRepository userCommConfigRepository,
+			AdminRepository adminRepository, AdminLoginOtpService adminLoginOtpService) {
 		this.userCommConfigRepository = userCommConfigRepository;
+		this.adminRepository = adminRepository;
+		this.adminLoginOtpService = adminLoginOtpService;
 	}
 
-	public void sendEmailOtp(String email) {
-		String normalized = normalizeEmail(email);
+	public void sendPasswordResetOtp(Admins admin) {
+		if (admin == null) {
+			throw new IllegalArgumentException("Admin account is required.");
+		}
+		String email = normalizeEmail(admin.getEmail());
+		Admins resolved = adminRepository.findByEmail(email)
+				.orElseThrow(() -> new IllegalArgumentException("Admin account is required."));
 		String otp = generateOtp6();
-		store.put(normalized, new OtpRecord(otp, Instant.now().plusSeconds(otpExpirySeconds)));
+		boolean sent = false;
+		try {
+			if (AdminLoginOtpService.hasEmail(resolved)) {
+				sendEmailOtp(email, otp);
+				sent = true;
+			}
+			if (AdminLoginOtpService.hasMobile(resolved)) {
+				adminLoginOtpService.sendPasswordResetMobileOtp(resolved.getMobileNo(), otp);
+				sent = true;
+			}
+			if (!sent) {
+				throw new IllegalStateException("No contact method is available for this account.");
+			}
+			store.put(email, new OtpRecord(otp, Instant.now().plusSeconds(otpExpirySeconds)));
+		} catch (RuntimeException ex) {
+			store.remove(email);
+			throw ex;
+		}
+	}
 
+	private void sendEmailOtp(String email, String otp) {
 		UserCommConfig cfg = getCommConfigOrNull();
 		if (cfg == null || isBlank(cfg.getUserMailHost()) || isBlank(cfg.getUserMailUsername())
 				|| isBlank(cfg.getUserMailPassword())) {
-			store.remove(normalized);
 			throw new IllegalStateException("SMTP is not configured. Set USER_MAIL_* in User Panel → Authentication → OTP Based.");
 		}
 
 		JavaMailSenderImpl sender = buildMailSender(cfg);
 		SimpleMailMessage msg = new SimpleMailMessage();
 		msg.setFrom(cfg.getUserMailUsername().trim());
-		msg.setTo(normalized);
+		msg.setTo(email);
 		msg.setSubject("RankWell Admin — password reset code");
 		msg.setText("Your OTP is: " + otp + "\n\nThis code expires in " + otpExpirySeconds + " seconds.");
 		sender.send(msg);

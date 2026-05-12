@@ -117,6 +117,10 @@ public class AdminLoginOtpService {
 		return admin != null && admin.getEmail() != null && !admin.getEmail().trim().isEmpty();
 	}
 
+	public void sendPasswordResetMobileOtp(String mobileNo, String otp) {
+		sendMobileOtpMessage(mobileNo, otp, "Your RankWell Admin password reset OTP is: ");
+	}
+
 	private void sendEmailOtp(String email, String otp) {
 		UserCommConfig cfg = getCommConfigOrNull();
 		if (cfg == null || isBlank(cfg.getUserMailHost()) || isBlank(cfg.getUserMailUsername())
@@ -135,6 +139,10 @@ public class AdminLoginOtpService {
 	}
 
 	private void sendMobileOtp(String mobileNo, String otp) {
+		sendMobileOtpMessage(mobileNo, otp, "Your RankWell Admin login OTP is: ");
+	}
+
+	private void sendMobileOtpMessage(String mobileNo, String otp, String heading) {
 		UserCommConfig cfg = getCommConfigOrNull();
 		if (cfg == null) {
 			throw new IllegalStateException("Twilio configuration is missing.");
@@ -149,8 +157,7 @@ public class AdminLoginOtpService {
 
 		String toE164 = toE164(mobileNo, cfg);
 		String from = cfg.getUserTwilioFromNumber().trim();
-		String body = "Your RankWell Admin login OTP is: " + otp + "\n\nThis code expires in " + otpExpirySeconds
-				+ " seconds.";
+		String body = heading + otp + "\n\nThis code expires in " + otpExpirySeconds + " seconds.";
 
 		try {
 			Twilio.init(cfg.getUserTwilioAccountSid().trim(), cfg.getUserTwilioAuthToken().trim());

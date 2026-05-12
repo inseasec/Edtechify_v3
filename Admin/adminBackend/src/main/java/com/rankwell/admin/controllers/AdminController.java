@@ -153,7 +153,7 @@ public class AdminController {
 		}
 	}
 
-	/** Forgot password: send 6-digit OTP to admin email using USER_MAIL_* SMTP (same as User panel). */
+	/** Forgot password: send 6-digit OTP to email and, when present, the admin mobile number. */
 	@PostMapping("/password/otp/send")
 	public ResponseEntity<String> sendAdminPasswordResetOtp(@RequestBody Map<String, String> body) {
 		String emailRaw = body != null ? body.get("email") : null;
@@ -165,11 +165,12 @@ public class AdminController {
 		if (adminOptForSend.isEmpty()) {
 			return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No admin account found for this email.");
 		}
-		if (Boolean.FALSE.equals(adminOptForSend.get().getIsActive())) {
+		Admins adminForSend = adminOptForSend.get();
+		if (Boolean.FALSE.equals(adminForSend.getIsActive())) {
 			return ResponseEntity.badRequest().body("Account is inactive. Please contact an administrator.");
 		}
 		try {
-			adminForgotPasswordOtpService.sendEmailOtp(email);
+			adminForgotPasswordOtpService.sendPasswordResetOtp(adminForSend);
 			return ResponseEntity.ok("OTP sent");
 		} catch (IllegalArgumentException e) {
 			return ResponseEntity.badRequest().body(e.getMessage());

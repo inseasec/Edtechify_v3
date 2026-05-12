@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { getUserRole } from '@/utils/auth';
 import { getPathForRole } from '@/utils/dashboardPaths';
 import { Eye, EyeOff } from 'lucide-react';
@@ -290,6 +290,56 @@ export default function Login() {
     }
   };
 
+  const onForgotPassword = async (e) => {
+    e.preventDefault();
+    const email = admin.email.trim().toLowerCase();
+    const nextErrors = {};
+
+    if (!email) {
+      nextErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      nextErrors.email = 'Invalid email format';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...nextErrors }));
+      return;
+    }
+
+    if (!baseUrl) {
+      await Swal.fire({
+        title: 'Missing API URL',
+        text: 'Set VITE_API_BASE_URL in Admin/client/.env (see .env.example).',
+        icon: 'warning',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await axios.post(`${baseUrl}/admin/password/otp/send`, { email });
+      navigate('/forgot-password', { state: { email, otpSent: true } });
+    } catch (error) {
+      Swal.fire({
+        title: 'Unable to send OTP',
+        text: getApiErrorText(error, 'Failed to send OTP. Please try again.'),
+        icon: 'error',
+        width: '320px',
+        timer: 2500,
+        showConfirmButton: false,
+        backdrop: true,
+        allowOutsideClick: false,
+        customClass: {
+          popup: 'rounded-lg p-5 shadow-md',
+          title: 'text-lg font-bold text-red-600',
+          htmlContainer: 'text-sm text-gray-700',
+        },
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div
       style={{ backgroundImage: `url(${bgImage})` }}
@@ -403,9 +453,13 @@ export default function Login() {
                   {errors.password && <p className="text-red-500 text-[12px]">{errors.password}</p>}
                 </div>
                 <div className="flex justify-end -mt-1 mb-1">
-                  <Link className="text-sm text-blue-600 hover:underline" to="/forgot-password">
+                  <button
+                    type="button"
+                    onClick={onForgotPassword}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
                     Forgot password?
-                  </Link>
+                  </button>
                 </div>
                 {errors.general && <p className="text-red-500 text-center text-sm">{errors.general}</p>}
                 <div className="text-center pb-3 md:pb-5">
