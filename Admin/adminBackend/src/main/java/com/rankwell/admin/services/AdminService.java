@@ -23,8 +23,6 @@ public interface AdminService {
 
 	Admins getAdminsByLoggedInUser(String email);
 
-	ResponseEntity<?> sendPasswordToMail(AdminDto adminDto, Principal principal);
-
 	ResponseEntity<String> updateByEmail(String email, AdminDto adminDto, Principal principal);
 	ResponseEntity<String> updatePasswordBySuperAdmin(Map<String, String> passwordInfo, String adminEmailId, Principal principal);
 

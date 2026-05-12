@@ -104,8 +104,8 @@ export default function ForgotPassword() {
 
       <div className="md:mr-36 pt-24 md:pt-32 flex-col w-[400px] md:w-[500px] z-10 relative">
         <div className="flex-col justify-center items-center px-4">
-          <p className="text-center text-white relative capitalize font-semibold text-xl md:text-3xl mb-6">
-            Rankwell&apos;s Admin Panel
+          <p className="text-center text-white relative font-semibold text-xl md:text-3xl mb-6">
+            Welcome To Edukify&apos;s Admin Panel
           </p>
         </div>
 

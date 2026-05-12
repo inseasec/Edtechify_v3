@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -12,6 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mail.MailException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,6 +42,7 @@ import com.RankwellClient.services.FacebookAuthService;
 import com.RankwellClient.services.GoogleAuthService;
 import com.RankwellClient.services.OtpService;
 import com.RankwellClient.services.UserService;
+import com.RankwellClient.util.MobileNoUtil;
 
 @RestController
 @RequestMapping("/users")
@@ -66,12 +71,19 @@ public class UserController {
 	public ResponseEntity<?> registerUser(@RequestBody UserDto userDTO){
 		String email = userDTO.getEmail() != null ? userDTO.getEmail().trim().toLowerCase() : null;
 		String mobileNo = userDTO.getMobileNo() != null ? userDTO.getMobileNo().trim() : null;
+		if (mobileNo != null && !mobileNo.isEmpty()) {
+			try {
+				mobileNo = MobileNoUtil.normalizeCompact(mobileNo, "+91");
+			} catch (IllegalArgumentException e) {
+				return ResponseEntity.badRequest().body(e.getMessage());
+			}
+		}
 
 		if (email != null && !email.isEmpty() && userRepository.findByEmail(email).isPresent()) {
-			return ResponseEntity.status(HttpStatus.CONFLICT).body("This email already exists.");
+			return ResponseEntity.status(HttpStatus.CONFLICT).body("Email not available for use.");
 		}
-		if (mobileNo != null && !mobileNo.isEmpty() && userRepository.findByMobileNo(mobileNo).isPresent()) {
-			return ResponseEntity.status(HttpStatus.CONFLICT).body("This phone number already exists.");
+		if (mobileNo != null && !mobileNo.isEmpty() && mobileExists(mobileNo)) {
+			return ResponseEntity.status(HttpStatus.CONFLICT).body("Mobile number not available for use.");
 		}
 
 		userDTO.setEmail(email);
@@ -83,12 +95,24 @@ public class UserController {
 	@GetMapping("/availability")
 	public ResponseEntity<Map<String, Object>> availability(
 			@RequestParam(required = false) String email,
-			@RequestParam(required = false) String mobileNo) {
+			@RequestParam(required = false) String mobileNo,
+			@RequestParam(required = false) Long excludeUserId) {
 		String normalizedEmail = email != null ? email.trim().toLowerCase() : "";
 		String normalizedMobile = mobileNo != null ? mobileNo.trim() : "";
-
 		boolean emailProvided = normalizedEmail != null && !normalizedEmail.isEmpty();
 		boolean mobileProvided = normalizedMobile != null && !normalizedMobile.isEmpty();
+
+		if (mobileProvided) {
+			try {
+				normalizedMobile = MobileNoUtil.normalizeCompact(normalizedMobile, "+91");
+			} catch (IllegalArgumentException e) {
+				return ResponseEntity.badRequest().body(Map.of(
+						"available", false,
+						"reason", "INVALID_MOBILE",
+						"message", e.getMessage()
+				));
+			}
+		}
 
 		if (!emailProvided && !mobileProvided) {
 			return ResponseEntity.badRequest().body(Map.of(
@@ -98,18 +122,18 @@ public class UserController {
 			));
 		}
 
-		if (emailProvided && userRepository.findByEmail(normalizedEmail).isPresent()) {
+		if (emailProvided && emailInUseByOther(normalizedEmail, excludeUserId)) {
 			return ResponseEntity.ok(Map.of(
 					"available", false,
 					"reason", "EMAIL_EXISTS",
-					"message", "This email already exists."
+					"message", "Email not available for use."
 			));
 		}
-		if (mobileProvided && userRepository.findByMobileNo(normalizedMobile).isPresent()) {
+		if (mobileProvided && mobileInUseByOther(normalizedMobile, excludeUserId)) {
 			return ResponseEntity.ok(Map.of(
 					"available", false,
 					"reason", "MOBILE_EXISTS",
-					"message", "This phone number already exists."
+					"message", "Mobile number not available for use."
 			));
 		}
 		return ResponseEntity.ok(Map.of("available", true));
@@ -141,7 +165,8 @@ public class UserController {
 		}
 
 		if (mobileNo != null && !mobileNo.isEmpty()) {
-			if (userRepository.findByMobileNo(mobileNo).isEmpty()) {
+			var userOpt = findUserByMobile(mobileNo);
+			if (userOpt.isEmpty()) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Account not found for this phone number.");
 			}
 			try {
@@ -185,7 +210,7 @@ public class UserController {
 		}
 
 		if (mobileNo != null && !mobileNo.isEmpty()) {
-			var userOpt = userRepository.findByMobileNo(mobileNo);
+			var userOpt = findUserByMobile(mobileNo);
 			if (userOpt.isEmpty()) return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Account not found for this phone number.");
 			boolean ok = otpService.verifyMobileOtp(mobileNo, otp);
 			if (!ok) return ResponseEntity.badRequest().body("Invalid or expired OTP");
@@ -201,6 +226,11 @@ public class UserController {
 	@PostMapping("/otp/send")
 	public ResponseEntity<String> sendEmailOtp(@RequestBody OtpSendRequest req) {
 		try {
+			String email = req.getEmail() == null ? null : req.getEmail().trim().toLowerCase();
+			Long userId = resolveAuthenticatedUserId();
+			if (userId != null && emailInUseByOther(email, userId)) {
+				return ResponseEntity.status(HttpStatus.CONFLICT).body("Email not available for use.");
+			}
 			otpService.sendEmailOtp(req.getEmail());
 			return ResponseEntity.ok("OTP sent");
 		} catch (IllegalArgumentException e) {
@@ -218,14 +248,23 @@ public class UserController {
 
 	@PostMapping("/otp/verify")
 	public ResponseEntity<String> verifyEmailOtp(@RequestBody OtpVerifyRequest req) {
-		boolean ok = otpService.verifyEmailOtp(req.getEmail(), req.getOtp());
-		if (!ok) return ResponseEntity.badRequest().body("Invalid or expired OTP");
-		return ResponseEntity.ok("OTP verified");
+		try {
+			String email = req.getEmail() == null ? null : req.getEmail().trim().toLowerCase();
+			boolean ok = otpService.verifyEmailOtp(email, req.getOtp());
+			if (!ok) return ResponseEntity.badRequest().body("Invalid or expired OTP");
+			return ResponseEntity.ok("OTP verified");
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(e.getMessage());
+		}
 	}
 
 	@PostMapping("/otp/mobile/send")
 	public ResponseEntity<String> sendMobileOtp(@RequestBody MobileOtpSendRequest req) {
 		try {
+			Long userId = resolveAuthenticatedUserId();
+			if (userId != null && mobileInUseByOther(req.getMobileNo(), userId)) {
+				return ResponseEntity.status(HttpStatus.CONFLICT).body("Mobile number not available for use.");
+			}
 			otpService.sendMobileOtp(req.getMobileNo());
 			return ResponseEntity.ok("OTP sent");
 		} catch (IllegalArgumentException e) {
@@ -320,6 +359,41 @@ public class UserController {
 	public String updateUserInfo(@PathVariable Long userId, @RequestBody UserDto userDto) {
 		return userService.updateUserInfo(userId,userDto);
 	}
+
+	@PutMapping("/contact-verification/{userId}")
+	public ResponseEntity<String> updateContactVerification(@PathVariable Long userId, @RequestBody UserDto userDto) {
+		Long authenticatedUserId = resolveAuthenticatedUserId();
+		if (authenticatedUserId == null || !authenticatedUserId.equals(userId)) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body("You are not allowed to update this account.");
+		}
+		return mapContactVerificationStatus(userService.updateContactVerification(userId, userDto));
+	}
+
+	private Long resolveAuthenticatedUserId() {
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null || !authentication.isAuthenticated()) {
+			return null;
+		}
+		Object principal = authentication.getPrincipal();
+		if (principal instanceof User user) {
+			try {
+				return Long.parseLong(user.getUsername());
+			} catch (NumberFormatException ignored) {
+				return null;
+			}
+		}
+		return null;
+	}
+
+	private ResponseEntity<String> mapContactVerificationStatus(String status) {
+		if ("User not found".equals(status)) {
+			return ResponseEntity.status(HttpStatus.NOT_FOUND).body(status);
+		}
+		if (status != null && status.contains("not available for use")) {
+			return ResponseEntity.status(HttpStatus.CONFLICT).body(status);
+		}
+		return ResponseEntity.ok(status == null || status.isBlank() ? "Contact verification updated" : status);
+	}
 	
 	@PutMapping("updateUserAddress/{userId}")
 	public String updateUserAddress(@PathVariable Long userId, @RequestBody UserDto userDto) {
@@ -347,5 +421,40 @@ public class UserController {
                 .sorted()
                 .collect(Collectors.toList());
     }
+
+	private boolean mobileExists(String mobileNo) {
+		return mobileInUseByOther(mobileNo, null);
+	}
+
+	private boolean emailInUseByOther(String email, Long excludeUserId) {
+		if (email == null || email.isBlank()) {
+			return false;
+		}
+		Optional<Users> existing = userRepository.findByEmail(email.trim().toLowerCase());
+		return existing.isPresent() && (excludeUserId == null || !existing.get().getId().equals(excludeUserId));
+	}
+
+	private boolean mobileInUseByOther(String mobileNo, Long excludeUserId) {
+		if (mobileNo == null || mobileNo.isBlank()) {
+			return false;
+		}
+		for (String variant : MobileNoUtil.lookupVariants(mobileNo, "+91")) {
+			Optional<Users> user = userRepository.findByMobileNo(variant);
+			if (user.isPresent() && (excludeUserId == null || !user.get().getId().equals(excludeUserId))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private Optional<Users> findUserByMobile(String mobileNo) {
+		for (String variant : MobileNoUtil.lookupVariants(mobileNo, "+91")) {
+			Optional<Users> user = userRepository.findByMobileNo(variant);
+			if (user.isPresent()) {
+				return user;
+			}
+		}
+		return Optional.empty();
+	}
 
 }

@@ -11,5 +11,7 @@ public interface EdukifyClientRepository extends JpaRepository<EdukifyClient, Lo
 
 	Optional<EdukifyClient> findByUserId(Long userId);
 
+	void deleteByUserId(Long userId);
+
 	List<EdukifyClient> findByPortalLaunchedAtIsNull();
 }

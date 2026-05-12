@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import com.RankwellClient.entity.UserCommConfig;
 import com.RankwellClient.repository.UserCommConfigRepository;
 import com.RankwellClient.services.OtpService;
+import com.RankwellClient.util.MobileNoUtil;
 import com.twilio.Twilio;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
@@ -83,11 +84,14 @@ public class OtpServiceImpl implements OtpService {
 	
 	@Override
 	public void sendMobileOtp(String mobileNo) {
-		String normalizedKey = normalizeMobileKey(mobileNo);
+		UserCommConfig cfg = getCommConfigOrNull();
+		String defaultCountryCode = cfg == null || isBlank(cfg.getUserTwilioDefaultCountryCode())
+				? "+91"
+				: cfg.getUserTwilioDefaultCountryCode().trim();
+		String normalizedKey = normalizeMobileKey(mobileNo, defaultCountryCode);
 		String otp = generateOtp6();
 		mobileStore.put(normalizedKey, new OtpRecord(otp, Instant.now().plusSeconds(otpExpirySeconds)));
 
-		UserCommConfig cfg = getCommConfigOrNull();
 		if (cfg == null || !parseBool(cfg.getUserTwilioEnabled()) || isBlank(cfg.getUserTwilioAccountSid())
 				|| isBlank(cfg.getUserTwilioAuthToken()) || isBlank(cfg.getUserTwilioFromNumber())) {
 			throw new IllegalStateException("Twilio is not configured. Please set USER_TWILIO_* keys in Admin → OAuth Keys.");
@@ -99,7 +103,11 @@ public class OtpServiceImpl implements OtpService {
 
 	@Override
 	public boolean verifyMobileOtp(String mobileNo, String otp) {
-		String normalizedKey = normalizeMobileKey(mobileNo);
+		UserCommConfig cfg = getCommConfigOrNull();
+		String defaultCountryCode = cfg == null || isBlank(cfg.getUserTwilioDefaultCountryCode())
+				? "+91"
+				: cfg.getUserTwilioDefaultCountryCode().trim();
+		String normalizedKey = normalizeMobileKey(mobileNo, defaultCountryCode);
 		OtpRecord rec = mobileStore.get(normalizedKey);
 		if (rec == null) return false;
 		if (Instant.now().isAfter(rec.expiresAt)) {
@@ -123,18 +131,13 @@ public class OtpServiceImpl implements OtpService {
 		return e;
 	}
 	
-	private static String normalizeMobileKey(String mobileNo) {
-		if (mobileNo == null) throw new IllegalArgumentException("Mobile number is required");
-		String digits = mobileNo.trim().replaceAll("\\D", "");
-		if (digits.length() < 10) throw new IllegalArgumentException("Invalid mobile number");
-		String last10 = digits.substring(digits.length() - 10);
-		if (!last10.matches("^\\d{10}$")) throw new IllegalArgumentException("Invalid mobile number");
-		return last10;
+	private static String normalizeMobileKey(String mobileNo, String defaultCountryCode) {
+		return MobileNoUtil.normalizeCompact(mobileNo, defaultCountryCode);
 	}
 
 	private static String sanitizeOtp(String otp) {
 		if (otp == null) return "";
-		return otp.trim();
+		return otp.replaceAll("\\s+", "");
 	}
 
 	private void sendViaTwilio(String toE164, String otp, UserCommConfig cfg) {
@@ -158,20 +161,10 @@ public class OtpServiceImpl implements OtpService {
 	}
 
 	private String toE164(String mobileNo, UserCommConfig cfg) {
-		if (mobileNo == null) throw new IllegalArgumentException("Mobile number is required");
-		String raw = mobileNo.trim();
-		if (raw.startsWith("+")) {
-			// Keep plus; strip spaces/dashes etc
-			String digits = raw.replaceAll("[^\\d+]", "");
-			if (!digits.matches("^\\+\\d{10,15}$")) throw new IllegalArgumentException("Invalid mobile number");
-			return digits;
-		}
-		String digits = raw.replaceAll("\\D", "");
-		if (digits.length() < 10) throw new IllegalArgumentException("Invalid mobile number");
-		String last10 = digits.substring(digits.length() - 10);
-		String cc = (cfg == null || isBlank(cfg.getUserTwilioDefaultCountryCode())) ? "+91" : cfg.getUserTwilioDefaultCountryCode().trim();
-		if (!cc.startsWith("+")) cc = "+" + cc;
-		return cc + last10;
+		String defaultCountryCode = cfg == null || isBlank(cfg.getUserTwilioDefaultCountryCode())
+				? "+91"
+				: cfg.getUserTwilioDefaultCountryCode().trim();
+		return MobileNoUtil.normalizeCompact(mobileNo, defaultCountryCode);
 	}
 
 	private UserCommConfig getCommConfigOrNull() {

@@ -20,6 +20,7 @@ export default function AdminOverView() {
     name: '',
     email: '',
     role: '',
+    mobileNo: '',
   })
   const [isEditing, setIsEditing] = useState(false)
   const [adminRes, setAdminRes] = useState('')
@@ -56,20 +57,15 @@ export default function AdminOverView() {
     [localAdmins],
   )
 
-  const formatDepartments = (admin) => {
-    const raw = admin?.departments ?? admin?.department ?? admin?.dept ?? null
-    if (Array.isArray(raw)) {
-      const names = raw
-        .map((d) => (typeof d === 'string' ? d : d?.name ?? d?.deptName ?? d?.departmentName ?? ''))
-        .map((s) => String(s).trim())
-        .filter(Boolean)
-      return names.length ? names.join(', ') : 'All Departments'
-    }
-    if (typeof raw === 'string') {
-      const v = raw.trim()
-      return v || 'All Departments'
-    }
-    return 'All Departments'
+  const formatMobile = (admin) => {
+    const raw = admin?.mobileNo ?? admin?.mobile_no ?? admin?.mobile ?? ''
+    const value = String(raw ?? '').trim()
+    return value || '—'
+  }
+
+  const formatSpecialPassword = (admin) => {
+    if (admin?.role !== 'SUPER_ADMIN') return '—'
+    return admin?.hasSpecialPassword === true ? 'Set' : 'Not set'
   }
 
   const displayAdmins = useMemo(() => {
@@ -83,6 +79,7 @@ export default function AdminOverView() {
       email: adminData.email,
       password: adminData.password,
       role: adminData.role,
+      mobileNo: adminData.mobileNo,
     }
 
     setLoading(true)
@@ -100,30 +97,65 @@ export default function AdminOverView() {
     }
   }
 
+  const hasMobile = (admin) => Boolean(admin?.mobileNo?.trim())
+  const hasEmail = (admin) => Boolean(admin?.email?.trim())
+
   const handleToggleStatus = async (email, field, currentValue) => {
+    if (field === 'isActive') {
+      const target = localAdmins.find((admin) => admin.email === email)
+      if (target?.role === 'SUPER_ADMIN') return
+    }
+
+    const target = localAdmins.find((admin) => admin.email === email)
     const newValue = !currentValue
+
+    if (field === 'is2FAEnabled' && newValue && !hasMobile(target)) {
+      showErrorToast('Add a mobile number before enabling mobile 2FA.')
+      return
+    }
+    if (field === 'is2FAEmailEnabled' && newValue && !hasEmail(target)) {
+      showErrorToast('Add an email address before enabling email 2FA.')
+      return
+    }
+
     setLocalAdmins((prev) =>
       prev.map((admin) => (admin.email === email ? { ...admin, [field]: newValue } : admin)),
     )
     try {
-      await api.put('/admin/updateStatus', { email, [field]: newValue })
+      const { data } = await api.put('/admin/updateStatus', { email, [field]: newValue })
+      if (typeof data === 'string' && data.includes('before enabling')) {
+        showErrorToast(data)
+        await refreshAdmins()
+        return
+      }
       await refreshAdmins()
     } catch (err) {
       console.error(err)
       await refreshAdmins()
-      showErrorToast(err?.response?.data?.message || 'Status update failed')
+      showErrorToast(err?.response?.data?.message || err?.response?.data || 'Status update failed')
     }
   }
 
-  const handleAdminFreeze = async (email, field, currentValue) => {
-    const newVal = !currentValue
-    try {
-      await api.put('/admin/updateStatus', { email, [field]: newVal })
-      await refreshAdmins()
-    } catch (error) {
-      console.error('Freeze update failed', error)
-      showErrorToast(error?.response?.data?.message || 'Update failed')
-    }
+  const renderTwoFactorToggle = (admin, field, enabled, label, canEnable) => {
+    const disableEnable = !enabled && !canEnable
+    return (
+      <button
+        type="button"
+        disabled={disableEnable}
+        onClick={() => {
+          if (disableEnable) return
+          handleToggleStatus(admin.email, field, enabled)
+        }}
+        aria-label={enabled ? `Disable ${label}` : `Enable ${label}`}
+        className={disableEnable ? 'cursor-not-allowed opacity-40' : ''}
+      >
+        {enabled ? (
+          <ToggleRight className="h-5 w-5 text-green-600" />
+        ) : (
+          <ToggleLeft className="h-5 w-5 text-gray-400" />
+        )}
+      </button>
+    )
   }
 
   const handleDeleteAdmin = async (id) => {
@@ -151,28 +183,21 @@ export default function AdminOverView() {
     setPassword({ newPassword: '', confirmPassword: '' })
   }
 
-  const sendMail = async (email, sendToSuperAdmin = false) => {
-    setLoading(true)
-    try {
-      const payload = { email }
-      if (sendToSuperAdmin) payload.sendMailToSuperAdmin = true
-      await api.post('/admin/sendPasswordToMail', payload)
-      ShowAlert('success', 'Mail sent successfully')
-    } catch (err) {
-      console.error(err)
-      ShowAlert('error', err?.response?.data?.message || 'Error sending mail.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleEditAdmin = async (adminData) => {
     const payload = {
       name: adminData.name,
       email: adminData.email,
       role: adminData.role,
+      mobileNo: adminData.mobileNo,
     }
     if (adminData.password) payload.password = adminData.password
+    if (adminData.role === 'SUPER_ADMIN') {
+      if (adminData.clearSpecialPassword) {
+        payload.clearSpecialPassword = true
+      } else if (adminData.specialPassword) {
+        payload.specialPassword = adminData.specialPassword
+      }
+    }
 
     try {
       await api.put(`/admin/update/${encodeURIComponent(update.email)}`, payload)
@@ -191,6 +216,9 @@ export default function AdminOverView() {
       email: admin.email,
       name: admin.name,
       role: admin.role,
+      mobileNo: admin.mobileNo ?? admin.mobile_no ?? admin.mobile ?? '',
+      specialPassword: '',
+      clearSpecialPassword: false,
     })
   }
 
@@ -246,6 +274,12 @@ export default function AdminOverView() {
       readOnly: isEditing,
     },
     {
+      name: 'mobileNo',
+      label: 'Mobile',
+      type: 'mobile',
+      placeholder: 'Mobile number',
+    },
+    {
       name: 'password',
       label: 'Password',
       type: 'password',
@@ -255,12 +289,7 @@ export default function AdminOverView() {
       name: 'role',
       label: 'Role',
       type: 'select',
-      options: [
-        { value: 'SUPER_ADMIN', label: 'SUPER_ADMIN' },
-        { value: 'TEAM_ADMIN', label: 'TEAM_ADMIN' },
-        { value: 'SUB_ADMIN', label: 'SUB_ADMIN' },
-        { value: 'HR', label: 'HR' },
-      ],
+      options: [{ value: 'HR', label: 'HR' }],
       placeholder: 'Select role',
     },
   ]
@@ -280,6 +309,12 @@ export default function AdminOverView() {
       placeholder: 'Enter name',
     },
     {
+      name: 'mobileNo',
+      label: 'Mobile',
+      type: 'mobile',
+      placeholder: 'Mobile number',
+    },
+    {
       name: 'role',
       label: 'Role',
       type: 'select',
@@ -291,6 +326,19 @@ export default function AdminOverView() {
       ],
       placeholder: 'Select role',
       readOnly: isEditing,
+    },
+    {
+      name: 'specialPassword',
+      label: 'Special password',
+      type: 'password',
+      placeholder: 'Leave blank to keep unchanged',
+      hide: (values) => values.role !== 'SUPER_ADMIN',
+    },
+    {
+      name: 'clearSpecialPassword',
+      label: 'Clear special password',
+      type: 'checkbox',
+      hide: (values) => values.role !== 'SUPER_ADMIN',
     },
   ]
 
@@ -318,7 +366,7 @@ export default function AdminOverView() {
             <h2 className="text-sm font-semibold mb-2">Add admin</h2>
             <ReusableForm
               onSubmit={handleAddAdmin}
-              initialValues={{ name: '', email: '', password: '', role: '' }}
+              initialValues={{ name: '', email: '', mobileNo: '', password: '', role: 'HR' }}
               fields={fields}
               buttonLabel="Submit"
               cancelButtonLabel="Cancel"
@@ -348,14 +396,14 @@ export default function AdminOverView() {
                   ))}
                 </select>
               </th>
-              <th className="p-2 text-left">Dept</th>
+              <th className="p-2 text-left">Mobile</th>
               <th className="p-2 text-center">Active</th>
               <th className="p-2 text-center">Delete</th>
               <th className="p-2 text-center">Edit</th>
               <th className="p-2 text-center">Change Password</th>
-              <th className="p-2 text-left">Password send email</th>
-              <th className="p-2 text-center">2FA</th>
-              <th className="p-2 text-center">Freeze</th>
+              <th className="p-2 text-center">Special Password</th>
+              <th className="p-2 text-center">2FA Mobile</th>
+              <th className="p-2 text-center">2FA Email</th>
             </tr>
           </thead>
   
@@ -379,16 +427,34 @@ export default function AdminOverView() {
   
                 <td className="p-2">{admin.role}</td>
   
-                <td className="p-2">{formatDepartments(admin)}</td>
+                <td className="p-2">{formatMobile(admin)}</td>
   
                 <td className="p-2 text-center">
                   <button
+                    type="button"
+                    disabled={admin.role === 'SUPER_ADMIN'}
                     onClick={() =>
                       handleToggleStatus(admin.email, 'isActive', admin.isActive)
                     }
+                    className={
+                      admin.role === 'SUPER_ADMIN'
+                        ? 'opacity-40 cursor-not-allowed'
+                        : ''
+                    }
+                    aria-label={
+                      admin.role === 'SUPER_ADMIN'
+                        ? 'Super admin active status cannot be changed'
+                        : admin.isActive
+                          ? 'Set admin inactive'
+                          : 'Set admin active'
+                    }
                   >
                     {admin.isActive ? (
-                      <ToggleRight className="h-5 w-5 text-green-600" />
+                      <ToggleRight
+                        className={`h-5 w-5 ${
+                          admin.role === 'SUPER_ADMIN' ? 'text-gray-400' : 'text-green-600'
+                        }`}
+                      />
                     ) : (
                       <ToggleLeft className="h-5 w-5 text-gray-400" />
                     )}
@@ -430,58 +496,27 @@ export default function AdminOverView() {
                     <KeyRound className="h-4 w-4" />
                   </button>
                 </td>
-  
-                <td className="p-2">
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => sendMail(admin.email, true)}
-                      className="bg-gray-700 text-white px-2 py-0.5 text-xs"
-                    >
-                      Admin
-                    </button>
-                    <button
-                      onClick={() => sendMail(admin.email)}
-                      className="bg-gray-700 text-white px-2 py-0.5 text-xs"
-                    >
-                      User
-                    </button>
-                  </div>
-                </td>
+
+                <td className="p-2 text-center">{formatSpecialPassword(admin)}</td>
   
                 <td className="p-2 text-center">
-                  <button
-                    onClick={() =>
-                      handleToggleStatus(
-                        admin.email,
-                        'is2FAEnabled',
-                        admin.is2FAEnabled
-                      )
-                    }
-                  >
-                    {admin.is2FAEnabled ? (
-                      <ToggleRight className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <ToggleLeft className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
+                  {renderTwoFactorToggle(
+                    admin,
+                    'is2FAEnabled',
+                    admin.is2FAEnabled === true,
+                    '2FA mobile',
+                    hasMobile(admin),
+                  )}
                 </td>
-  
+
                 <td className="p-2 text-center">
-                  <button
-                    onClick={() =>
-                      handleAdminFreeze(
-                        admin.email,
-                        'freezeAccess',
-                        admin.freezeAccess
-                      )
-                    }
-                  >
-                    {admin.freezeAccess ? (
-                      <ToggleRight className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <ToggleLeft className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
+                  {renderTwoFactorToggle(
+                    admin,
+                    'is2FAEmailEnabled',
+                    admin.is2FAEmailEnabled === true,
+                    '2FA email',
+                    hasEmail(admin),
+                  )}
                 </td>
               </tr>
             ))}

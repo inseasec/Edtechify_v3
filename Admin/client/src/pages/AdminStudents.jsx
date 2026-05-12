@@ -8,9 +8,11 @@ import {
   Eye,
   EyeOff,
   Info,
+  Trash2,
 } from 'lucide-react'
 import api from '@/lib/api'
 import { showSuccessToast, showErrorToast, getApiErrorMessage } from '@/utils/toastUtils'
+import DeleteConfirmation from '@/utils/DeleteConfirmation'
 
 const usersPerPage = 10
 
@@ -178,7 +180,9 @@ export default function AdminStudents() {
       setLoading(true)
       const res = await api.get('/clients/portal-rows')
       const raw = res.data?.data ?? res.data ?? []
-      const list = Array.isArray(raw) ? raw : []
+      const list = Array.isArray(raw)
+        ? raw.filter((r) => r && r.portalLaunched === true)
+        : []
       setRows(
         list.map((r) => ({
           ...r,
@@ -516,6 +520,30 @@ export default function AdminStudents() {
       const msg = getApiErrorMessage(err)
       const code = err?.response?.status
       showErrorToast(code ? `Could not update live status (${code}): ${msg}` : `Could not update live status: ${msg}`)
+    }
+  }
+
+  const handleDeleteClient = async () => {
+    if (!detailRow?.portalLaunched) return
+    const uid = detailRow.userId ?? detailRow.user_id ?? detailRow.id
+    if (uid == null) return
+    const label = detailRow.companyName?.trim() || detailRow.email || 'this client'
+    try {
+      await DeleteConfirmation({
+        title: 'Delete client record?',
+        text: `Permanently remove ${label}? This deletes the learner account, portal record, billing data, and stored uploads. This cannot be undone.`,
+        successMessage: 'Client record permanently removed.',
+        errorMessage: 'Could not delete this client.',
+        onConfirm: async () => {
+          await api.delete(`/clients/user/${uid}`)
+        },
+        onSuccess: () => {
+          setRows((prev) => prev.filter((r) => (r.userId ?? r.user_id ?? r.id) !== uid))
+          setDetailRow(null)
+        },
+      })
+    } catch (err) {
+      console.error('Delete client failed', err)
     }
   }
 
@@ -1146,6 +1174,16 @@ export default function AdminStudents() {
             >
               Change password
             </button>
+            {detailRow.portalLaunched ? (
+              <button
+                type="button"
+                onClick={handleDeleteClient}
+                className="mt-3 w-full inline-flex items-center justify-center gap-2 py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 font-semibold hover:bg-red-100"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+                Delete client record
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setDetailRow(null)}

@@ -7,6 +7,13 @@ import { Eye, EyeOff } from 'lucide-react';
 import Swal from 'sweetalert2';
 import bgImage from '../assets/pexels-fauxels-3184460-1.jpg';
 import LoadingSpinner from '@/utils/LoadingSpinner';
+
+const formatOtpCountdown = (totalSeconds) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
 export default function Login() {
   const [admin, setAdmin] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
@@ -14,11 +21,20 @@ export default function Login() {
   const [isValid, setIsValid] = useState(false);
   const [isOtp, setIsOtp] = useState(false);
   const [otp, setOtp] = useState('');
+  const [otpMessage, setOtpMessage] = useState('');
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
-  // const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
   const baseUrl = window._CONFIG_.VITE_API_BASE_URL?.replace(/\/$/, '');
+
+  const getApiErrorText = (error, fallback) => {
+    const data = error?.response?.data;
+    if (typeof data === 'string' && data.trim()) return data;
+    if (data?.message) return data.message;
+    return fallback;
+  };
 
   useEffect(() => {
     const role = getUserRole();
@@ -26,6 +42,44 @@ export default function Login() {
       navigate(getPathForRole(role), { replace: true });
     }
   }, [navigate]);
+
+  const beginOtpChallenge = (data) => {
+    const expiresAtMs = Number(data?.otpExpiresAt);
+    const expirySeconds = Number(data?.otpExpirySeconds);
+
+    setOtp('');
+    setOtpMessage(data?.message || 'Enter the verification code sent to your email or mobile.');
+    setIsOtp(true);
+
+    if (Number.isFinite(expiresAtMs) && expiresAtMs > 0) {
+      setOtpExpiresAt(expiresAtMs);
+      return;
+    }
+
+    if (Number.isFinite(expirySeconds) && expirySeconds > 0) {
+      setOtpExpiresAt(Date.now() + expirySeconds * 1000);
+      return;
+    }
+
+    setOtpExpiresAt(Date.now() + 300 * 1000);
+  };
+
+  useEffect(() => {
+    if (!isOtp || !otpExpiresAt) {
+      setOtpSecondsLeft(0);
+      return undefined;
+    }
+
+    const updateRemaining = () => {
+      setOtpSecondsLeft(Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000)));
+    };
+
+    updateRemaining();
+    const timerId = window.setInterval(updateRemaining, 1000);
+    return () => window.clearInterval(timerId);
+  }, [isOtp, otpExpiresAt]);
+
+  const canResendOtp = isOtp && otpSecondsLeft === 0;
 
   const validateForm = (email, password) => {
     let tempErrors = {};
@@ -87,8 +141,58 @@ export default function Login() {
     }, 1500);
   };
 
+  const onResendOtp = async () => {
+    if (!canResendOtp || loading) return;
+
+    if (!baseUrl) {
+      await Swal.fire({
+        title: 'Missing API URL',
+        text: 'Set VITE_API_BASE_URL in Admin/client/.env (see .env.example).',
+        icon: 'warning',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post(`${baseUrl}/admin/login/resend-otp`, {
+        email: admin.email.trim().toLowerCase(),
+        password: admin.password,
+      });
+      beginOtpChallenge(response.data);
+    } catch (error) {
+      Swal.fire({
+        title: 'Resend Failed',
+        text: getApiErrorText(error, 'Unable to resend OTP. Please try again.'),
+        icon: 'error',
+        width: '320px',
+        timer: 2500,
+        showConfirmButton: false,
+        backdrop: true,
+        allowOutsideClick: false,
+        customClass: {
+          popup: 'rounded-lg p-5 shadow-md',
+          title: 'text-lg font-bold text-red-600',
+          htmlContainer: 'text-sm text-gray-700',
+        },
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onSubmitOtp = async (e) => {
     e.preventDefault();
+    const trimmedOtp = otp.trim();
+    if (!/^\d{6}$/.test(trimmedOtp)) {
+      await Swal.fire({
+        title: 'Invalid OTP',
+        text: 'Enter the 6-digit code sent to your email or mobile.',
+        icon: 'warning',
+        width: '320px',
+      });
+      return;
+    }
     if (!baseUrl) {
       await Swal.fire({
         title: 'Missing API URL',
@@ -100,8 +204,8 @@ export default function Login() {
     setLoading(true);
     try {
       const response = await axios.post(`${baseUrl}/admin/verify-otp`, {
-        email: admin.email,
-        otp,
+        email: admin.email.trim().toLowerCase(),
+        otp: trimmedOtp,
       });
 
       const { email, token } = response.data;
@@ -113,7 +217,7 @@ export default function Login() {
     } catch (error) {
       Swal.fire({
         title: 'OTP Verification Failed!',
-        text: error.response?.data?.message || 'Invalid OTP. Please try again.',
+        text: getApiErrorText(error, 'Invalid OTP. Please try again.'),
         icon: 'error',
         width: '320px',
         timer: 2000,
@@ -147,19 +251,23 @@ export default function Login() {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${baseUrl}/admin/login`, admin);
-      const { email, token } = response.data;
+      const response = await axios.post(`${baseUrl}/admin/login`, {
+        email: admin.email.trim().toLowerCase(),
+        password: admin.password,
+      });
+      const { email, token, requiresOtp } = response.data;
 
-      if (token) {
+      if (token && requiresOtp !== true) {
         localStorage.setItem('email', email);
         localStorage.setItem('token', token);
         const userRole = getUserRole();
         runSuccessFlow(userRole);
-      } else {
-        setIsOtp(true);
+        return;
       }
+
+      beginOtpChallenge(response.data);
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Invalid Password. Please try again.';
+      const errorMessage = getApiErrorText(error, 'Invalid Password. Please try again.');
       Swal.fire({
         title: 'Login Failed!',
         text: errorMessage,
@@ -193,10 +301,10 @@ export default function Login() {
 
       <div className="md:mr-36 pt-72 md:pt-40 flex-col w-[400px] md:w-[500px] z-10 relative">
         <div className="flex-col justify-center items-center">
-          <p className="text-center text-white relative capitalize font-semibold text-2xl md:text-4xl">
-            Welcome to the Rankwell’s
+          <p className="text-center text-white relative font-semibold text-2xl md:text-4xl">
+            Welcome To Edukify&apos;s
           </p>
-          <p className="text-center text-white relative capitalize font-semibold text-2xl md:text-4xl">
+          <p className="text-center text-white relative font-semibold text-2xl md:text-4xl">
             Admin Panel
           </p>
         </div>
@@ -211,15 +319,41 @@ export default function Login() {
           <div className="">
             {isOtp ? (
               <form onSubmit={onSubmitOtp} className="w-[79%] mx-auto py-2 space-y-4">
+                {otpMessage ? (
+                  <p className="text-center text-sm text-gray-700 px-1">{otpMessage}</p>
+                ) : null}
                 <input
                   type="text"
                   name="otp"
-                  placeholder="Enter OTP"
+                  placeholder="Enter 6-digit OTP"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  pattern="\d{6}"
                   required
                   className="w-full border-2 border-black outline-none p-[6px] rounded-md bg-white focus:border-blue-600 transition-all duration-300"
                 />
+                <p className="text-center text-sm text-gray-600">
+                  {otpSecondsLeft > 0
+                    ? `OTP expires in ${formatOtpCountdown(otpSecondsLeft)}`
+                    : 'OTP has expired. You can request a new code.'}
+                </p>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={onResendOtp}
+                    disabled={!canResendOtp || loading}
+                    className={`text-sm font-medium ${
+                      canResendOtp && !loading
+                        ? 'text-blue-600 hover:underline'
+                        : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    Resend OTP
+                  </button>
+                </div>
                 <div className="flex mt-4 justify-center item-center">
                   <button
                     type="submit"

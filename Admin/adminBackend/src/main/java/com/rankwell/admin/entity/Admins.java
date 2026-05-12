@@ -6,6 +6,8 @@ import java.util.List;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 
 import jakarta.persistence.CascadeType;
@@ -41,6 +43,9 @@ public class Admins {
 	@Enumerated(EnumType.STRING)
 	@Column(nullable=false)
 	private Role role;
+
+	@Column(name = "mobile_no", length = 32)
+	private String mobileNo;
 	
 //	@ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
 //	@JoinTable(name = "admin_departments", joinColumns = @JoinColumn(name = "admin_id"), inverseJoinColumns = @JoinColumn(name = "dept_id"))
@@ -58,9 +63,12 @@ public class Admins {
 	
 	@Column(name = "is_2fa_enabled" ,nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
 	private Boolean is2FAEnabled = true;
-	
-	@Column(name = "freeze_access_to_admins", nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
-	private Boolean freezeAccess = true;
+
+	@Column(name = "is_2fa_email_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
+	private Boolean is2FAEmailEnabled = true;
+
+	@Column(name = "special_password")
+	private String specialPassword;
 
 	public enum Role {
         SUPER_ADMIN, TEAM_ADMIN, SUB_ADMIN, HR
@@ -104,6 +112,14 @@ public class Admins {
 
 	public void setRole(Role role) {
 		this.role = role;
+	}
+
+	public String getMobileNo() {
+		return mobileNo;
+	}
+
+	public void setMobileNo(String mobileNo) {
+		this.mobileNo = mobileNo;
 	}
 
 	public String getEmail() {
@@ -150,19 +166,41 @@ public class Admins {
 	}
 
 	public void setIs2FAEnabled(Boolean is2faEnabled) {
-		is2FAEnabled = is2faEnabled;
-	}
-	public Boolean getFreezeAccess() {
-		return freezeAccess;
+		this.is2FAEnabled = is2faEnabled;
 	}
 
-	public void setFreezeAccess(Boolean freezeAccess) {
-		this.freezeAccess = freezeAccess;
+	public Boolean getIs2FAEmailEnabled() {
+		return is2FAEmailEnabled;
+	}
+
+	public void setIs2FAEmailEnabled(Boolean is2faEmailEnabled) {
+		this.is2FAEmailEnabled = is2faEmailEnabled;
+	}
+
+	@JsonIgnore
+	public String getSpecialPassword() {
+		return specialPassword;
+	}
+
+	public void setSpecialPassword(String rawPassword) {
+		if (rawPassword == null || rawPassword.isBlank()) {
+			return;
+		}
+		this.specialPassword = new BCryptPasswordEncoder().encode(rawPassword);
+	}
+
+	public void clearSpecialPassword() {
+		this.specialPassword = null;
+	}
+
+	@JsonProperty("hasSpecialPassword")
+	public boolean getHasSpecialPassword() {
+		return specialPassword != null && !specialPassword.isBlank();
 	}
 
 	public Admins(Long id, String name, String email, String password, Boolean isActive, Role role,
-			 String otp, LocalDateTime otpCreatedAt, LocalDateTime otpExpiresAt,
-			Boolean is2faEnabled, Boolean freezeAccess) {
+			String mobileNo, String otp, LocalDateTime otpCreatedAt, LocalDateTime otpExpiresAt,
+			Boolean is2faEnabled, Boolean is2faEmailEnabled) {
 		super();
 		this.id = id;
 		this.name = name;
@@ -170,11 +208,12 @@ public class Admins {
 		this.password = password;
 		this.isActive = isActive;
 		this.role = role;
+		this.mobileNo = mobileNo;
 		this.otp = otp;
 		this.otpCreatedAt = otpCreatedAt;
 		this.otpExpiresAt = otpExpiresAt;
 		this.is2FAEnabled = is2faEnabled;
-		this.freezeAccess = freezeAccess;
+		this.is2FAEmailEnabled = is2faEmailEnabled;
 	}
 
 	public Admins() {

@@ -2,6 +2,9 @@ import React, { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { getApiErrorMessage } from "../utils/authPayload";
+import { appendAuthIdentifierErrors, resolveAuthIdentifier } from "../utils/authIdentifier";
+import { parsePhonePrefill } from "../utils/phoneValidation";
+import AuthIdentifierFields from "../Components/AuthIdentifierFields";
 import defaultAuthSideImg from "../assets/auth-side-default.jpg";
 
 export default function ForgotPassword() {
@@ -14,43 +17,60 @@ export default function ForgotPassword() {
     return typeof s === "string" ? s : "";
   }, [location?.state?.identifier]);
 
-  const [identifier, setIdentifier] = useState(initialIdentifier);
+  const initialIsEmail = initialIdentifier.includes("@");
+  const initialPhone = useMemo(
+    () => (initialIsEmail ? { countryCode: "+91", number: "" } : parsePhonePrefill(initialIdentifier)),
+    [initialIdentifier, initialIsEmail],
+  );
+
+  const [identifier, setIdentifier] = useState(
+    initialIsEmail ? initialIdentifier : "",
+  );
+  const [phoneCountryCode, setPhoneCountryCode] = useState(initialPhone.countryCode);
+  const [phoneNational, setPhoneNational] = useState(initialPhone.number);
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [step, setStep] = useState(1); // 1: send otp, 2: reset
+  const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const identifierRaw = useMemo(() => String(identifier ?? "").trim(), [identifier]);
-  const identifierType = useMemo(() => {
-    if (!identifierRaw) return "unknown";
-    if (/^\d{10}$/.test(identifierRaw.replace(/\D/g, "").slice(-10))) return "mobile";
-    if (/\S+@\S+\.\S+/.test(identifierRaw)) return "email";
-    return "unknown";
-  }, [identifierRaw]);
-  const identifierNormalized = useMemo(() => {
-    if (identifierType === "mobile") {
-      const digits = identifierRaw.replace(/\D/g, "");
-      return digits.length >= 10 ? digits.slice(-10) : digits;
-    }
-    if (identifierType === "email") return identifierRaw.toLowerCase();
-    return identifierRaw;
-  }, [identifierRaw, identifierType]);
+  const authResolved = useMemo(
+    () =>
+      resolveAuthIdentifier("BOTH", {
+        identifier,
+        phoneCountryCode,
+        phoneNational,
+      }),
+    [identifier, phoneCountryCode, phoneNational],
+  );
+  const identifierType = authResolved.channel;
+  const identifierNormalized =
+    identifierType === "mobile" ? authResolved.mobileNo : authResolved.email;
+  const identifierDisplay =
+    identifierType === "mobile" ? authResolved.mobileDisplay : authResolved.email;
+
+  const resetFlow = () => {
+    setStep(1);
+    setOtp("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setFieldErrors({});
+  };
 
   const sendOtp = async () => {
     setError("");
     setMessage("");
-    if (!identifierRaw) {
-      setError("Email or phone number is required.");
+    const tempError = {};
+    appendAuthIdentifierErrors(tempError, authResolved, "BOTH");
+    if (Object.keys(tempError).length) {
+      setFieldErrors(tempError);
       return;
     }
-    if (identifierType === "unknown") {
-      setError("Enter a valid email or 10-digit mobile number.");
-      return;
-    }
+    setFieldErrors({});
 
     setBusy(true);
     try {
@@ -58,8 +78,7 @@ export default function ForgotPassword() {
         identifierType === "email"
           ? { email: identifierNormalized }
           : { mobileNo: identifierNormalized };
-      const { data } = await axios.post(`${baseUrl}/users/password/otp/send`, payload);
-      // Keep UI clean: don't show "OTP sent" message here.
+      await axios.post(`${baseUrl}/users/password/otp/send`, payload);
       setMessage("");
       setStep(2);
     } catch (e) {
@@ -89,8 +108,11 @@ export default function ForgotPassword() {
       setError("Passwords do not match.");
       return;
     }
-    if (identifierType === "unknown") {
-      setError("Enter a valid email or 10-digit mobile number.");
+    const tempError = {};
+    appendAuthIdentifierErrors(tempError, authResolved, "BOTH");
+    if (Object.keys(tempError).length) {
+      setFieldErrors(tempError);
+      setError("Enter a valid email or mobile number.");
       return;
     }
 
@@ -112,19 +134,85 @@ export default function ForgotPassword() {
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
-      <div className="w-full md:w-[30%] flex items-start justify-center p-6 pt-10 bg-white">
-        <div className="w-full max-w-md">
-          <div className="mx-auto px-1 py-2">
-            {/* <div className="h-14 w-14 rounded-2xl bg-indigo-600/15 flex items-center justify-center">
-              <span className="text-indigo-700 font-bold text-2xl">V</span>
-            </div> */}
+      <ForgotPasswordForm
+        error={error}
+        message={message}
+        step={step}
+        busy={busy}
+        identifier={identifier}
+        phoneCountryCode={phoneCountryCode}
+        phoneNational={phoneNational}
+        identifierDisplay={identifierDisplay}
+        fieldErrors={fieldErrors}
+        otp={otp}
+        newPassword={newPassword}
+        confirmPassword={confirmPassword}
+        showPassword={showPassword}
+        onIdentifierChange={(value) => {
+          setIdentifier(value);
+          resetFlow();
+        }}
+        onPhoneCountryCodeChange={(value) => {
+          setPhoneCountryCode(value);
+          resetFlow();
+        }}
+        onPhoneNationalChange={(value) => {
+          setPhoneNational(value);
+          resetFlow();
+        }}
+        onOtpChange={setOtp}
+        onNewPasswordChange={setNewPassword}
+        onConfirmPasswordChange={setConfirmPassword}
+        onTogglePassword={() => setShowPassword((p) => !p)}
+        onSendOtp={sendOtp}
+        onResetPassword={resetPassword}
+      />
+      <div className="hidden md:block md:w-[70%] relative">
+        <img
+          src={defaultAuthSideImg}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </div>
+    </div>
+  );
+}
 
-            <h3 className="mt-2 text-2xl font-semibold text-gray-900">Forgot Password</h3>
-            {/* <p className="mt-2 text-sm text-gray-500">Reset your password using OTP</p> */}
+function ForgotPasswordForm(props) {
+  const {
+    error,
+    message,
+    step,
+    busy,
+    identifier,
+    phoneCountryCode,
+    phoneNational,
+    identifierDisplay,
+    fieldErrors,
+    otp,
+    newPassword,
+    confirmPassword,
+    showPassword,
+    onIdentifierChange,
+    onPhoneCountryCodeChange,
+    onPhoneNationalChange,
+    onOtpChange,
+    onNewPasswordChange,
+    onConfirmPasswordChange,
+    onTogglePassword,
+    onSendOtp,
+    onResetPassword,
+  } = props;
+
+  return (
+    <div className="w-full md:w-[30%] flex items-start justify-center p-6 pt-10 bg-white">
+      <div className="w-full max-w-md">
+        <div className="mx-auto px-1 py-2">
+          <h3 className="mt-2 text-2xl font-semibold text-gray-900">Forgot Password</h3>
 
           {message && (
             <p className="mt-4 text-sm text-green-700" role="status">
-              {/* {message} */}
+              {message}
             </p>
           )}
           {error && (
@@ -134,28 +222,33 @@ export default function ForgotPassword() {
           )}
 
           <div className="mt-[25%] space-y-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 ">Email or mobile number</label>
-              <input
-                className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
-                value={identifier}
-                onChange={(e) => {
-                  setIdentifier(e.target.value);
-                  setStep(1);
-                  setOtp("");
-                  setNewPassword("");
-                  setConfirmPassword("");
-                }}
-                type="text"
-                autoComplete="username"
+            {step === 1 ? (
+              <AuthIdentifierFields
+                mode="BOTH"
+                identifier={identifier}
+                phoneCountryCode={phoneCountryCode}
+                phoneNational={phoneNational}
+                onIdentifierChange={onIdentifierChange}
+                onPhoneCountryCodeChange={onPhoneCountryCodeChange}
+                onPhoneNationalChange={onPhoneNationalChange}
                 disabled={busy}
+                errors={fieldErrors}
               />
-            </div>
+            ) : (
+              <AuthIdentifierFields
+                mode="BOTH"
+                identifier={identifier}
+                phoneCountryCode={phoneCountryCode}
+                phoneNational={phoneNational}
+                readOnly
+                readOnlyValue={identifierDisplay}
+              />
+            )}
 
             {step === 1 ? (
               <button
                 type="button"
-                onClick={sendOtp}
+                onClick={onSendOtp}
                 disabled={busy}
                 className="mt-1 h-9 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
@@ -168,7 +261,7 @@ export default function ForgotPassword() {
                   <input
                     className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 tracking-[0.35em] shadow-sm outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    onChange={(e) => onOtpChange(e.target.value)}
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -181,16 +274,16 @@ export default function ForgotPassword() {
                   <label className="text-sm font-medium text-gray-700">New Password</label>
                   <div className="relative mt-1">
                     <input
-                      className=" mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-4 pr-10 text-sm text-gray-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
+                      className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-4 pr-10 text-sm text-gray-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
                       value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
+                      onChange={(e) => onNewPasswordChange(e.target.value)}
                       type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
                       disabled={busy}
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPassword((p) => !p)}
+                      onClick={onTogglePassword}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
@@ -199,58 +292,47 @@ export default function ForgotPassword() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Confirm Password</label>
-                  <input
-                    className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    disabled={busy}
-                  />
-                </div>
+                <ConfirmPasswordField
+                  confirmPassword={confirmPassword}
+                  onConfirmPasswordChange={onConfirmPasswordChange}
+                  busy={busy}
+                />
 
                 <button
                   type="button"
-                  onClick={resetPassword}
+                  onClick={onResetPassword}
                   disabled={busy}
-                  className="mt-2 h-9 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="mt-1 h-9 w-full rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {busy ? "Updating…" : "Reset Password"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={sendOtp}
-                  disabled={busy}
-                  className="text-indigo-700 text-sm underline w-full mt-2"
-                >
-                  Resend OTP
+                  {busy ? "Updating…" : "Reset password"}
                 </button>
               </>
             )}
-          </div>
-          </div>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
-            Remembered it?{" "}
-            <Link className="text-indigo-600 font-medium" to="/signin">
-              Sign In
-            </Link>
-          </p>
+            <p className="text-center text-sm text-gray-600">
+              <Link to="/signin" className="text-indigo-600 hover:text-indigo-700">
+                Back to sign in
+              </Link>
+            </p>
+          </div>
         </div>
-      </div>
-
-      <div className="relative md:w-[70%] min-h-[40vh] md:min-h-screen overflow-hidden">
-        <img
-          src={defaultAuthSideImg}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-        <div className="absolute inset-0 bg-black/60" />
       </div>
     </div>
   );
 }
 
+function ConfirmPasswordField({ confirmPassword, onConfirmPasswordChange, busy }) {
+  return (
+    <div>
+      <label className="text-sm font-medium text-gray-700">Confirm Password</label>
+      <input
+        className="mt-1 h-9 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
+        value={confirmPassword}
+        onChange={(e) => onConfirmPasswordChange(e.target.value)}
+        type="password"
+        autoComplete="new-password"
+        disabled={busy}
+      />
+    </div>
+  );
+}

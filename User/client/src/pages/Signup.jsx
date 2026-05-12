@@ -3,6 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useMutation } from "@tanstack/react-query";
 import { buildAuthPayload, getApiErrorMessage } from "../utils/authPayload";
+import { storeSignupChannelFromToken } from "../utils/signupChannel";
+import { resolveAuthIdentifier, appendAuthIdentifierErrors } from "../utils/authIdentifier";
+import { DEFAULT_PHONE_COUNTRY_CODE } from "../constants/countryCodes";
+import AuthIdentifierFields from "../Components/AuthIdentifierFields";
 import defaultAuthSideImg from "../assets/auth-side-default.jpg";
 import AuthHeroTagline from "../Components/AuthHeroTagline";
 
@@ -63,12 +67,15 @@ function Signup() {
   const [normalStep, setNormalStep] = useState(1); // NORMAL mode only: 1=email, 2=password
   const [otpNotice, setOtpNotice] = useState("");
   const [socialProviders, setSocialProviders] = useState({
-    googleEnabled: true,
-    facebookEnabled: true,
-    githubEnabled: true,
+    googleEnabled: false,
+    facebookEnabled: false,
+    githubEnabled: false,
   });
+  const [socialProvidersLoaded, setSocialProvidersLoaded] = useState(false);
   const [userInfo, setUserInfo] = useState({
     identifier: "",
+    phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
+    phoneNational: "",
     otp: "",
     password: "",
   });
@@ -160,8 +167,9 @@ function Signup() {
           githubEnabled: Boolean(res?.data?.githubEnabled),
         });
       })
-      .catch(() => {
-        // ignore; keep default
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setSocialProvidersLoaded(true);
       });
     return () => {
       mounted = false;
@@ -268,24 +276,21 @@ function Signup() {
     };
   }, [baseUrl]);
 
-  const identifierRaw = useMemo(
-    () => String(userInfo.identifier ?? "").trim(),
-    [userInfo.identifier]
+  const authResolved = useMemo(
+    () =>
+      resolveAuthIdentifier(signupMode, {
+        identifier: userInfo.identifier,
+        phoneCountryCode: userInfo.phoneCountryCode,
+        phoneNational: userInfo.phoneNational,
+      }),
+    [signupMode, userInfo.identifier, userInfo.phoneCountryCode, userInfo.phoneNational],
   );
-  const identifierType = useMemo(() => {
-    if (!identifierRaw) return "unknown";
-    if (/^\d{10}$/.test(identifierRaw.replace(/\D/g, "").slice(-10))) return "mobile";
-    if (/\S+@\S+\.\S+/.test(identifierRaw)) return "email";
-    return "unknown";
-  }, [identifierRaw]);
-  const identifierNormalized = useMemo(() => {
-    if (identifierType === "mobile") {
-      const digits = identifierRaw.replace(/\D/g, "");
-      return digits.length >= 10 ? digits.slice(-10) : digits;
-    }
-    return identifierRaw;
-  }, [identifierRaw, identifierType]);
-  const isIdentifierValid = identifierType !== "unknown";
+  const identifierType = authResolved.channel;
+  const identifierNormalized =
+    identifierType === "mobile" ? authResolved.mobileNo : authResolved.email;
+  const identifierDisplay =
+    identifierType === "mobile" ? authResolved.mobileDisplay : authResolved.email;
+  const isIdentifierValid = authResolved.isValid;
   const otpRequired = signupMode !== "NORMAL";
   const isNormalMode = signupMode === "NORMAL";
   const shouldShowIdentifierInput = useMemo(() => {
@@ -296,7 +301,6 @@ function Signup() {
   }, [isNormalMode, normalStep, otpRequired, otpSent, otpVerified]);
   const isAllowedIdentifier = useMemo(() => {
     if (!isIdentifierValid) return false;
-    // NORMAL mode: email or mobile + password (no OTP)
     if (signupMode === "NORMAL") return identifierType === "email" || identifierType === "mobile";
     if (signupMode === "BOTH") return true;
     if (signupMode === "EMAIL") return identifierType === "email";
@@ -305,15 +309,15 @@ function Signup() {
   }, [identifierType, isIdentifierValid, signupMode]);
 
   const identifierHelpText = useMemo(() => {
-    if (!identifierRaw) return "";
+    if (!isIdentifierValid) return "";
     if (signupMode === "MOBILE" && identifierType === "email") {
-      return "This portal is configured for mobile sign-up. Please enter a 10-digit mobile number."
+      return "This portal is configured for mobile sign-up. Please enter a mobile number.";
     }
     if (signupMode === "EMAIL" && identifierType === "mobile") {
-      return "This portal is configured for email sign-up. Please enter a valid email address."
+      return "This portal is configured for email sign-up. Please enter a valid email address.";
     }
-    return ""
-  }, [identifierRaw, identifierType, signupMode])
+    return "";
+  }, [identifierType, isIdentifierValid, signupMode]);
 
   useEffect(() => {
     // Reset availability when identifier changes.
@@ -339,7 +343,11 @@ function Signup() {
           const message = String(res?.data?.message || "");
           setAvailability({ checking: false, available, message });
           if (!available && message) {
-            setError((p) => ({ ...p, identifier: message }));
+            setError((p) =>
+              identifierType === "mobile"
+                ? { ...p, phoneNational: message }
+                : { ...p, identifier: message },
+            );
           }
         })
         .catch(() => {
@@ -392,14 +400,13 @@ function Signup() {
     },
     onSuccess: async () => {
       try {
-        const loginPayload = {
-          email: identifierType === "email" ? identifierNormalized : "",
-          mobileNo: identifierType === "mobile" ? identifierNormalized : "",
-          password: userInfo.password,
-        };
+        const loginPayload = buildAuthPayload({ ...userInfo, signupMode });
         const { data } = await axios.post(`${baseUrl}/users/signin`, loginPayload);
         const token = typeof data === "string" ? data : data?.token ?? data?.accessToken ?? data?.jwt;
-        if (token) localStorage.setItem("authToken", token);
+        if (token) {
+          localStorage.setItem("authToken", token);
+          storeSignupChannelFromToken(token, identifierType);
+        }
         navigate("/", { replace: true });
       } catch {
         // If auto-login fails for any reason, send user to sign in.
@@ -563,36 +570,30 @@ function Signup() {
     e.preventDefault();
     setError({});
     if (!validate()) return;
-    const payload = buildAuthPayload(userInfo);
+    const payload = buildAuthPayload({ ...userInfo, signupMode });
+    if (otpRequired && otpVerified) {
+      if (identifierType === "email") payload.emailVerified = true;
+      if (identifierType === "mobile") payload.mobileVerified = true;
+    }
     signupMutation.mutate(payload);
   };
 
   const handleSendOtp = async () => {
-    setError((p) => ({ ...p, otpSend: undefined, otpVerify: undefined, identifier: undefined, otp: undefined }));
+    setError((p) => ({
+      ...p,
+      otpSend: undefined,
+      otpVerify: undefined,
+      identifier: undefined,
+      phoneCountryCode: undefined,
+      phoneNational: undefined,
+      otp: undefined,
+    }));
     setOtpNotice("");
 
-    if (!identifierRaw) {
-      setError((p) => ({
-        ...p,
-        identifier: signupMode === "NORMAL" || signupMode === "EMAIL" ? "Email is required." : "Email or mobile number is required.",
-      }));
-      return;
-    }
-    if (!isIdentifierValid) {
-      setError((p) => ({
-        ...p,
-        identifier: signupMode === "NORMAL" || signupMode === "EMAIL" ? "Enter a valid email." : "Enter a valid email or 10-digit mobile number.",
-      }));
-      return;
-    }
-    if (!isAllowedIdentifier) {
-      setError((p) => ({
-        ...p,
-        identifier:
-          signupMode === "NORMAL" || signupMode === "EMAIL"
-            ? "Enter a valid email."
-            : "Enter a valid 10-digit mobile number.",
-      }));
+    const tempError = {};
+    appendAuthIdentifierErrors(tempError, authResolved, signupMode);
+    if (Object.keys(tempError).length) {
+      setError((p) => ({ ...p, ...tempError }));
       return;
     }
 
@@ -622,52 +623,59 @@ function Signup() {
       return;
     }
     if (!isIdentifierValid) {
-      setError((p) => ({ ...p, identifier: "Enter a valid email or 10-digit mobile number." }));
+      const tempError = {};
+      appendAuthIdentifierErrors(tempError, authResolved, signupMode);
+      setError((p) => ({ ...p, ...tempError }));
       return;
     }
 
     verifyOtpMutation.mutate({ type: identifierType, value: identifierNormalized, otp });
   };
 
+  const resetIdentifierFlow = () => {
+    setOtpSent(false);
+    setOtpVerified(false);
+    if (signupMode === "NORMAL") setNormalStep(1);
+    setUserInfo((prev) => ({ ...prev, otp: "" }));
+    setError((p) => ({
+      ...p,
+      identifier: undefined,
+      phoneCountryCode: undefined,
+      phoneNational: undefined,
+    }));
+  };
+
+  const handleIdentifierChange = (value) => {
+    setUserInfo((prev) => ({ ...prev, identifier: value }));
+    resetIdentifierFlow();
+  };
+
+  const handlePhoneCountryCodeChange = (value) => {
+    setUserInfo((prev) => ({ ...prev, phoneCountryCode: value }));
+    resetIdentifierFlow();
+  };
+
+  const handlePhoneNationalChange = (value) => {
+    setUserInfo((prev) => ({ ...prev, phoneNational: value }));
+    resetIdentifierFlow();
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setUserInfo((prev) => ({ ...prev, [name]: value }));
-    if (name === "identifier") {
-      setOtpSent(false);
-      setOtpVerified(false);
-      if (signupMode === "NORMAL") setNormalStep(1);
-      setUserInfo((prev) => ({ ...prev, otp: "" }));
-      // Don't keep showing "exists" error while typing; availability check will set it.
-      setError((p) => ({ ...p, identifier: undefined }));
-    }
   };
 
   const validateIdentifierOnly = () => {
     const tempError = {};
-
-    if (!identifierRaw) {
-      tempError.identifier =
-        signupMode === "EMAIL"
-          ? "Email is required."
-          : signupMode === "MOBILE"
-            ? "Mobile number is required."
-            : "Email or mobile number is required.";
-    } else if (!isIdentifierValid) {
-      tempError.identifier =
-        signupMode === "EMAIL"
-          ? "Enter a valid email."
-          : signupMode === "MOBILE"
-            ? "Enter a valid 10-digit mobile number."
-            : "Enter a valid email or 10-digit mobile number.";
-    } else if (!isAllowedIdentifier) {
-      tempError.identifier =
-        signupMode === "EMAIL"
-          ? "Enter a valid email."
-          : signupMode === "MOBILE"
-            ? "Enter a valid 10-digit mobile number."
-            : "Enter a valid email or 10-digit mobile number.";
-    } else if (!availability.available) {
-      tempError.identifier = availability.message || "This account already exists.";
+    appendAuthIdentifierErrors(tempError, authResolved, signupMode);
+    if (isIdentifierValid && !isAllowedIdentifier) {
+      appendAuthIdentifierErrors(tempError, { ...authResolved, isAllowed: false }, signupMode);
+    } else if (isIdentifierValid && isAllowedIdentifier && !availability.available) {
+      if (identifierType === "mobile") {
+        tempError.phoneNational = availability.message || "This account already exists.";
+      } else {
+        tempError.identifier = availability.message || "This account already exists.";
+      }
     }
 
     setError((p) => ({ ...p, ...tempError }));
@@ -675,7 +683,12 @@ function Signup() {
   };
 
   const handleNormalContinue = () => {
-    setError((p) => ({ ...p, identifier: undefined }));
+    setError((p) => ({
+      ...p,
+      identifier: undefined,
+      phoneCountryCode: undefined,
+      phoneNational: undefined,
+    }));
     if (!validateIdentifierOnly()) return;
     setNormalStep(2);
   };
@@ -684,31 +697,15 @@ function Signup() {
     const tempError = {};
     const { password } = userInfo;
 
-    if (!identifierRaw) {
-      tempError.identifier =
-        signupMode === "EMAIL"
-          ? "Email is required."
-          : signupMode === "MOBILE"
-            ? "Mobile number is required."
-            : "Email or mobile number is required.";
-    } else if (!isIdentifierValid) {
-      tempError.identifier =
-        signupMode === "EMAIL"
-          ? "Enter a valid email."
-          : signupMode === "MOBILE"
-            ? "Enter a valid 10-digit mobile number."
-            : "Enter a valid email or 10-digit mobile number.";
-    }
-    else if (!isAllowedIdentifier) {
-      tempError.identifier =
-        signupMode === "EMAIL"
-          ? "Enter a valid email."
-          : signupMode === "MOBILE"
-            ? "Enter a valid 10-digit mobile number."
-            : "Enter a valid email or 10-digit mobile number.";
-    }
-    else if (!availability.available) {
-      tempError.identifier = availability.message || "This account already exists.";
+    appendAuthIdentifierErrors(tempError, authResolved, signupMode);
+    if (isIdentifierValid && !isAllowedIdentifier) {
+      appendAuthIdentifierErrors(tempError, { ...authResolved, isAllowed: false }, signupMode);
+    } else if (isIdentifierValid && isAllowedIdentifier && !availability.available) {
+      if (identifierType === "mobile") {
+        tempError.phoneNational = availability.message || "This account already exists.";
+      } else {
+        tempError.identifier = availability.message || "This account already exists.";
+      }
     }
 
     if (otpRequired && !otpVerified) tempError.otpVerify = "Please verify OTP before creating the account.";
@@ -735,6 +732,11 @@ function Signup() {
     if (otpSent) return 2;
     return 1;
   }, [otpSent, otpVerified]);
+  const showSocialSignup =
+    socialProvidersLoaded &&
+    (socialProviders.googleEnabled ||
+      socialProviders.facebookEnabled ||
+      socialProviders.githubEnabled);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
@@ -757,8 +759,7 @@ function Signup() {
               </div>
             )}
 
-            {shouldShowIdentifierInput &&
-              (socialProviders.googleEnabled || socialProviders.facebookEnabled || socialProviders.githubEnabled) && (
+            {shouldShowIdentifierInput && showSocialSignup && (
               <div className="mt-7 space-y-3">
                 {socialProviders.googleEnabled && (
                   <button
@@ -826,7 +827,7 @@ function Signup() {
               </div>
             )}
 
-            {shouldShowIdentifierInput && (
+            {shouldShowIdentifierInput && showSocialSignup && (
               <div className="my-7 flex items-center gap-4">
                 <div className="h-px flex-1 bg-gray-200" />
                 <span className="text-xs font-semibold tracking-wide text-gray-400">OR</span>
@@ -837,36 +838,22 @@ function Signup() {
             <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
               {shouldShowIdentifierInput && (
                 <div>
-                  <label className="text-sm font-medium text-gray-700">
-                    {signupMode === "NORMAL"
-                      ? "Email or mobile number"
-                      : signupMode === "EMAIL"
-                        ? "Email address"
-                      : signupMode === "MOBILE"
-                        ? "Mobile number"
-                        : "Email or mobile number"}
-                  </label>
-                  <div className="relative mt-2">
-                    <input
-                      className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
-                      name="identifier"
-                      value={userInfo.identifier}
-                      onChange={handleChange}
-                      type="text"
-                      inputMode={signupMode === "MOBILE" ? "tel" : "text"}
-                      autoComplete="username"
-                      placeholder={
-                        signupMode === "MOBILE"
-                          ? "9876543210"
-                          : signupMode === "NORMAL" || signupMode === "EMAIL"
-                            ? "you@company.com"
-                            : "you@company.com or 9876543210"
-                      }
-                      disabled={sendOtpMutation.isPending || verifyOtpMutation.isPending || otpVerified}
-                    />
-                  </div>
-                  {error.identifier && <p className="mt-2 text-sm text-red-600">{error.identifier}</p>}
-                  {!error.identifier && identifierHelpText && (
+                  <AuthIdentifierFields
+                    mode={signupMode}
+                    identifier={userInfo.identifier}
+                    phoneCountryCode={userInfo.phoneCountryCode}
+                    phoneNational={userInfo.phoneNational}
+                    onIdentifierChange={handleIdentifierChange}
+                    onPhoneCountryCodeChange={handlePhoneCountryCodeChange}
+                    onPhoneNationalChange={handlePhoneNationalChange}
+                    disabled={sendOtpMutation.isPending || verifyOtpMutation.isPending || otpVerified}
+                    errors={{
+                      identifier: error.identifier,
+                      phoneCountryCode: error.phoneCountryCode,
+                      phoneNational: error.phoneNational,
+                    }}
+                  />
+                  {!error.identifier && !error.phoneNational && identifierHelpText && (
                     <p className="mt-2 text-sm text-amber-700">{identifierHelpText}</p>
                   )}
                   {otpVerified && (
@@ -883,22 +870,14 @@ function Signup() {
                     OTP sent to your {identifierType === "email" ? "email" : "mobile"}.
                   </p> */}
                   {otpNotice && <p className="text-xs text-green-700">{otpNotice}</p>}
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      {identifierType === "mobile" ? "Mobile number" : "Email address"}
-                    </label>
-                    <div className="relative mt-2">
-                      <input
-                        className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm text-gray-900 shadow-sm outline-none"
-                        name="identifier"
-                        value={userInfo.identifier}
-                        type="text"
-                        autoComplete="username"
-                        disabled
-                        readOnly
-                      />
-                    </div>
-                  </div>
+                  <AuthIdentifierFields
+                    mode={signupMode}
+                    identifier={userInfo.identifier}
+                    phoneCountryCode={userInfo.phoneCountryCode}
+                    phoneNational={userInfo.phoneNational}
+                    readOnly
+                    readOnlyValue={identifierDisplay}
+                  />
                   <div>
                     <label className="text-sm font-medium text-gray-700">OTP</label>
                     <input

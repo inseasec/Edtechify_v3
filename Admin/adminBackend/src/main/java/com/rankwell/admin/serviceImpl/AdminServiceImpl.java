@@ -4,7 +4,6 @@ import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -21,6 +20,7 @@ import com.rankwell.admin.dto.AdminDto;
 import com.rankwell.admin.entity.Admins;
 import com.rankwell.admin.entity.Admins.Role;
 import com.rankwell.admin.repository.AdminRepository;
+import com.rankwell.admin.serviceImpl.AdminLoginOtpService;
 import com.rankwell.admin.services.AdminService;
 import com.rankwell.admin.entity.EnvironmentSetting;
 import com.rankwell.admin.services.EnvironmentSettingService;
@@ -34,9 +34,6 @@ public class AdminServiceImpl implements AdminService{
 	
 	@Autowired
 	private PasswordEncoder passwordEncoder;
-	
-	@Autowired
-	private SuperAdmin superAdmin;
 
 	@Autowired
     private EnvironmentSettingService environmentSettingService;
@@ -65,13 +62,8 @@ public class AdminServiceImpl implements AdminService{
 		}
 		newAdmin.setRole(adminDto.getRole());
 		newAdmin.setIsActive(true);
+		newAdmin.setMobileNo(normalizeAdminMobile(adminDto.getMobileNo()));
 
-//		if (adminDto.getDeptId() != null && !adminDto.getDeptId().isEmpty()){
-//            List<Departments> departments =
-//                    departmentRepository.findAllById(adminDto.getDeptId());
-//            newAdmin.setDepartments(departments);
-//         }
- 
 		adminRepository.save(newAdmin);
 		return "Admin Created Successfully";
 	}
@@ -80,20 +72,35 @@ public class AdminServiceImpl implements AdminService{
 	public String updateAdminStatus(AdminDto adminDto) {
 		Admins admin = adminRepository.findByEmail(adminDto.getEmail()).orElseThrow(() -> new RuntimeException("Admin Not Found"));
 		if(adminDto.getIsActive() != null) {
+			if (admin.getRole() == Role.SUPER_ADMIN) {
+				return "Super admin active status cannot be changed";
+			}
 			admin.setIsActive(adminDto.getIsActive());
 			adminRepository.save(admin);
 			return adminDto.getIsActive() ? "Admin is now Active" : "Admin has been Disabled";
 		}
 		if(adminDto.getIs2FAEnabled() != null) {
+			if (Boolean.TRUE.equals(adminDto.getIs2FAEnabled()) && !AdminLoginOtpService.hasMobile(admin)) {
+				return "Add a mobile number before enabling mobile 2FA.";
+			}
 			admin.setIs2FAEnabled(adminDto.getIs2FAEnabled());
-		}
-		if(adminDto.getFreezeAccess() != null) {
-			admin.setFreezeAccess(adminDto.getFreezeAccess());
 			adminRepository.save(admin);
-			return adminDto.getFreezeAccess() ? "Admin now use the Freeze Button" : "Permission Denied For Using Freeze Button";
+			return adminDto.getIs2FAEnabled()
+					? "Two factor authentication for mobile is enabled"
+					: "Two factor authentication for mobile is disabled";
+		}
+		if(adminDto.getIs2FAEmailEnabled() != null) {
+			if (Boolean.TRUE.equals(adminDto.getIs2FAEmailEnabled()) && !AdminLoginOtpService.hasEmail(admin)) {
+				return "Add an email address before enabling email 2FA.";
+			}
+			admin.setIs2FAEmailEnabled(adminDto.getIs2FAEmailEnabled());
+			adminRepository.save(admin);
+			return adminDto.getIs2FAEmailEnabled()
+					? "Two factor authentication for email is enabled"
+					: "Two factor authentication for email is disabled";
 		}
 		adminRepository.save(admin);
-		return adminDto.getIs2FAEnabled() ? "Two Factor Authentication Is Enabled" : "Two Factor Authentication Is Disabled";
+		return "Admin status updated";
 	}
 
 	@Override
@@ -141,46 +148,6 @@ public class AdminServiceImpl implements AdminService{
 		return null;
 	}
 
-	@Override
-	public ResponseEntity<?> sendPasswordToMail(AdminDto adminDto, Principal principal) { 
-		
-		Admins loggedInsuperAdmin = adminRepository.findByEmail(principal.getName()).orElseThrow(() ->
-		new IllegalArgumentException("Invalid Email"));
-		
-		if(!loggedInsuperAdmin.getRole().equals(Role.SUPER_ADMIN)) {
-			return ResponseEntity.badRequest().body("You are not authorized to do this operations:");
-		}
-		
-		//whom password need to send (super admin)
-		if(adminDto.getSendMailToSuperAdmin() != null) {
-			Admins admin = adminRepository.findByEmail(adminDto.getEmail()).orElseThrow(() ->
-			new IllegalArgumentException("Invalid Email"));
-			
-			String email = principal.getName();
-			String password = UUID.randomUUID().toString().substring(0,8);
-			
-			admin.setPassword(password);
-			adminRepository.save(admin);
-			
-			superAdmin.sendEmailWithPassword(email, password);
-			ResponseEntity.ok().body("Password Successfully Sent To Super Admin Mail");
-		}else { //other admins
-			Admins admin = adminRepository.findByEmail(adminDto.getEmail()).orElseThrow(() ->
-			new IllegalArgumentException("Invalid Email"));
-			
-			String email = admin.getEmail();
-			String password = UUID.randomUUID().toString().substring(0,8);
-			
-			admin.setPassword(password);
-			
-			superAdmin.sendEmailWithPassword(email, password);
-			
-			ResponseEntity.ok().body("Password Successfully Sent To Admin Mail");
-		 }
-		
-		   return null;
-	 }
-
 	@Transactional
 	@Override
 	public ResponseEntity<String> updateByEmail(String email, AdminDto adminDto, Principal principal) {
@@ -214,7 +181,17 @@ public class AdminServiceImpl implements AdminService{
 //				admin.getDepartments().addAll(newDepartments);
 //			}
 
-			admin.setName(adminDto.getName()); // You can know able to update the admin's name (TeamAdmin/SubAdmin).
+			admin.setName(adminDto.getName());
+			if (adminDto.getMobileNo() != null) {
+				admin.setMobileNo(normalizeAdminMobile(adminDto.getMobileNo()));
+			}
+			if (admin.getRole() == Role.SUPER_ADMIN && loggedInsuperAdmin.getRole() == Role.SUPER_ADMIN) {
+				if (Boolean.TRUE.equals(adminDto.getClearSpecialPassword())) {
+					admin.clearSpecialPassword();
+				} else if (adminDto.getSpecialPassword() != null && !adminDto.getSpecialPassword().isBlank()) {
+					admin.setSpecialPassword(adminDto.getSpecialPassword());
+				}
+			}
 			adminRepository.save(admin);
 			return ResponseEntity.ok("Admin updated successfully");
 
@@ -258,6 +235,15 @@ public class AdminServiceImpl implements AdminService{
 		return ResponseEntity.ok("Password Updated Successfully");
 	}
 
+
+
+	private static String normalizeAdminMobile(String mobileNo) {
+		if (mobileNo == null) {
+			return null;
+		}
+		String trimmed = mobileNo.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
 
 	// file server switching logic, without logge as of now get permission issue.
 	@Override

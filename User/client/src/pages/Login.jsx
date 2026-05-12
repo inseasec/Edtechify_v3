@@ -3,6 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useMutation } from "@tanstack/react-query";
 import { buildAuthPayload, getApiErrorMessage } from "../utils/authPayload";
+import { storeSignupChannelFromToken } from "../utils/signupChannel";
+import { appendAuthIdentifierErrors, resolveAuthIdentifier } from "../utils/authIdentifier";
+import { DEFAULT_PHONE_COUNTRY_CODE } from "../constants/countryCodes";
+import AuthIdentifierFields from "../Components/AuthIdentifierFields";
 import defaultAuthSideImg from "../assets/auth-side-default.jpg";
 import AuthHeroTagline from "../Components/AuthHeroTagline";
 
@@ -60,16 +64,22 @@ function loadFacebookScript() {
 
 function Login() {
   const navigate = useNavigate();
-  const [userInfo, setUserInfo] = useState({ identifier: "", password: "" });
+  const [userInfo, setUserInfo] = useState({
+    identifier: "",
+    phoneCountryCode: DEFAULT_PHONE_COUNTRY_CODE,
+    phoneNational: "",
+    password: "",
+  });
   const [loginStep, setLoginStep] = useState(1); // 1=identifier, 2=password
   const [existence, setExistence] = useState({ checking: false, exists: null }); // exists: true|false|null
   const [error, setError] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [socialProviders, setSocialProviders] = useState({
-    googleEnabled: true,
-    facebookEnabled: true,
-    githubEnabled: true,
+    googleEnabled: false,
+    facebookEnabled: false,
+    githubEnabled: false,
   });
+  const [socialProvidersLoaded, setSocialProvidersLoaded] = useState(false);
   const [googleClientId, setGoogleClientId] = useState("");
   const [googleError, setGoogleError] = useState("");
   const [googlePrompting, setGooglePrompting] = useState(false);
@@ -107,21 +117,21 @@ function Login() {
     }
   }
 
-  const identifierRaw = useMemo(() => String(userInfo.identifier ?? "").trim(), [userInfo.identifier]);
-  const identifierType = useMemo(() => {
-    if (!identifierRaw) return "unknown";
-    if (/^\d{10}$/.test(identifierRaw.replace(/\D/g, "").slice(-10))) return "mobile";
-    if (/\S+@\S+\.\S+/.test(identifierRaw)) return "email";
-    return "unknown";
-  }, [identifierRaw]);
-  const identifierNormalized = useMemo(() => {
-    if (identifierType === "mobile") {
-      const digits = identifierRaw.replace(/\D/g, "");
-      return digits.length >= 10 ? digits.slice(-10) : digits;
-    }
-    return identifierRaw;
-  }, [identifierRaw, identifierType]);
-  const isIdentifierValid = identifierType !== "unknown";
+  const authResolved = useMemo(
+    () =>
+      resolveAuthIdentifier("BOTH", {
+        identifier: userInfo.identifier,
+        phoneCountryCode: userInfo.phoneCountryCode,
+        phoneNational: userInfo.phoneNational,
+      }),
+    [userInfo.identifier, userInfo.phoneCountryCode, userInfo.phoneNational],
+  );
+  const identifierType = authResolved.channel;
+  const identifierNormalized =
+    identifierType === "mobile" ? authResolved.mobileNo : authResolved.email;
+  const identifierDisplay =
+    identifierType === "mobile" ? authResolved.mobileDisplay : authResolved.email;
+  const isIdentifierValid = authResolved.isValid;
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -154,7 +164,10 @@ function Login() {
           githubEnabled: Boolean(res?.data?.githubEnabled),
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setSocialProvidersLoaded(true);
+      });
     return () => {
       mounted = false;
     };
@@ -321,6 +334,7 @@ function Login() {
           : data?.token ?? data?.accessToken ?? data?.jwt;
       if (token) {
         localStorage.setItem("authToken", token);
+        storeSignupChannelFromToken(token, identifierType);
       }
       navigate("/", { replace: true });
     },
@@ -479,47 +493,70 @@ function Login() {
     e.preventDefault();
     setError({});
     if (!validate()) return;
-    const payload = buildAuthPayload(userInfo);
+    const payload = buildAuthPayload({ ...userInfo, signupMode: "BOTH" });
     loginMutation.mutate(payload);
+  };
+
+  const resetIdentifierFlow = () => {
+    setLoginStep(1);
+    setError((p) => ({
+      ...p,
+      identifier: undefined,
+      phoneCountryCode: undefined,
+      phoneNational: undefined,
+    }));
+    setExistence({ checking: false, exists: null });
+  };
+
+  const handleIdentifierChange = (value) => {
+    setUserInfo((prev) => ({ ...prev, identifier: value }));
+    resetIdentifierFlow();
+  };
+
+  const handlePhoneCountryCodeChange = (value) => {
+    setUserInfo((prev) => ({ ...prev, phoneCountryCode: value }));
+    resetIdentifierFlow();
+  };
+
+  const handlePhoneNationalChange = (value) => {
+    setUserInfo((prev) => ({ ...prev, phoneNational: value }));
+    resetIdentifierFlow();
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setUserInfo((prev) => ({ ...prev, [name]: value }));
-    if (name === "identifier") {
-      setLoginStep(1);
-      setError((p) => ({ ...p, identifier: undefined }));
-      setExistence({ checking: false, exists: null });
-    }
   };
 
   const validateIdentifierOnly = () => {
     const tempError = {};
-    const { identifier } = userInfo;
-    if (!identifier) tempError.identifier = "Email or mobile number is required.";
-    else if (!/^\d{10}$/.test(identifier.trim()) && !/\S+@\S+\.\S+/.test(identifier))
-      tempError.identifier = "Enter a valid email or mobile number.";
-    else if (existence.exists === false) tempError.identifier = "User doesn't exist. Please sign up.";
+    appendAuthIdentifierErrors(tempError, authResolved, "BOTH");
+    if (existence.exists === false) {
+      if (identifierType === "mobile") {
+        tempError.phoneNational = "User doesn't exist. Please sign up.";
+      } else {
+        tempError.identifier = "User doesn't exist. Please sign up.";
+      }
+    }
     setError((p) => ({ ...p, ...tempError }));
     return Object.keys(tempError).length === 0;
   };
 
   const handleContinue = () => {
-    setError((p) => ({ ...p, identifier: undefined }));
+    setError((p) => ({
+      ...p,
+      identifier: undefined,
+      phoneCountryCode: undefined,
+      phoneNational: undefined,
+    }));
     if (!validateIdentifierOnly()) return;
     setLoginStep(2);
   };
 
   const validate = () => {
     const tempError = {};
-    const { identifier, password } = userInfo;
-
-    if (!identifier) tempError.identifier = "Email or mobile number is required.";
-    else if (!/^\d{10}$/.test(identifier.trim()) && !/\S+@\S+\.\S+/.test(identifier))
-      tempError.identifier = "Enter a valid email or mobile number.";
-
-    if (password.length < 6) tempError.password = "";
-
+    appendAuthIdentifierErrors(tempError, authResolved, "BOTH");
+    if (userInfo.password.length < 6) tempError.password = "";
     setError(tempError);
     return Object.keys(tempError).length === 0;
   };
@@ -527,6 +564,11 @@ function Login() {
   const apiMessageRaw = loginMutation.isError ? getApiErrorMessage(loginMutation.error) : null;
   const apiMessage =
     apiMessageRaw && /invalid password/i.test(apiMessageRaw) ? "Wrong password" : apiMessageRaw;
+  const showSocialSignIn =
+    socialProvidersLoaded &&
+    (socialProviders.googleEnabled ||
+      socialProviders.facebookEnabled ||
+      socialProviders.githubEnabled);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
@@ -548,8 +590,7 @@ function Login() {
               </div>
             )}
 
-            {loginStep === 1 &&
-              (socialProviders.googleEnabled || socialProviders.facebookEnabled || socialProviders.githubEnabled) && (
+            {loginStep === 1 && showSocialSignIn && (
               <div className="mt-7 space-y-3">
                 {socialProviders.googleEnabled && (
                   <button
@@ -611,7 +652,7 @@ function Login() {
               </div>
             )}
 
-            {loginStep === 1 && (
+            {loginStep === 1 && showSocialSignIn && (
               <div className="my-7 flex items-center gap-4">
                 <div className="h-px flex-1 bg-gray-200" />
                 <span className="text-xs font-semibold tracking-wide text-gray-400">OR</span>
@@ -622,20 +663,21 @@ function Login() {
             <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
               {loginStep === 1 && (
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Email or mobile number</label>
-                  <div className="relative mt-2">
-                    <input
-                      className="h-11 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 disabled:bg-gray-50"
-                      name="identifier"
-                      value={userInfo.identifier}
-                      onChange={handleChange}
-                      type="text"
-                      autoComplete="username"
-                      placeholder="you@company.com"
-                      disabled={loginMutation.isPending}
-                    />
-                  </div>
-                  {error.identifier && <p className="mt-2 text-sm text-red-600">{error.identifier}</p>}
+                  <AuthIdentifierFields
+                    mode="BOTH"
+                    identifier={userInfo.identifier}
+                    phoneCountryCode={userInfo.phoneCountryCode}
+                    phoneNational={userInfo.phoneNational}
+                    onIdentifierChange={handleIdentifierChange}
+                    onPhoneCountryCodeChange={handlePhoneCountryCodeChange}
+                    onPhoneNationalChange={handlePhoneNationalChange}
+                    disabled={loginMutation.isPending}
+                    errors={{
+                      identifier: error.identifier,
+                      phoneCountryCode: error.phoneCountryCode,
+                      phoneNational: error.phoneNational,
+                    }}
+                  />
                   {!error.identifier && existence.exists === false && (
                     <p className="mt-2 text-sm text-red-600" role="alert">
                       User doesn&apos;t exist. Please sign up.
@@ -646,20 +688,14 @@ function Login() {
 
               {loginStep === 2 && (
                 <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Email or mobile number</label>
-                    <div className="relative mt-2">
-                      <input
-                        className="h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm text-gray-900 shadow-sm outline-none"
-                        name="identifier"
-                        value={userInfo.identifier}
-                        type="text"
-                        autoComplete="username"
-                        disabled
-                        readOnly
-                      />
-                    </div>
-                  </div>
+                  <AuthIdentifierFields
+                    mode="BOTH"
+                    identifier={userInfo.identifier}
+                    phoneCountryCode={userInfo.phoneCountryCode}
+                    phoneNational={userInfo.phoneNational}
+                    readOnly
+                    readOnlyValue={identifierDisplay}
+                  />
 
                   <div>
                     <label className="text-sm font-medium text-gray-700">Password</label>
@@ -696,7 +732,7 @@ function Login() {
                     <Link
                       className="shrink-0 text-sm text-indigo-600"
                       to="/forgot-password"
-                      state={{ identifier: userInfo.identifier }}
+                      state={{ identifier: identifierDisplay }}
                     >
                       Forgot password?
                     </Link>

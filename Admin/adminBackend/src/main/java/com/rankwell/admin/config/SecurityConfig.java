@@ -71,7 +71,7 @@ public class SecurityConfig {
 				// If you want to lock this down later, switch to hasAuthority("ROLE_SUPER_ADMIN") etc.
 				.requestMatchers("/organizations/addUpdateDetails").permitAll()
 				.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-				.requestMatchers("/admin/login", "/admin/verify-otp", "/admin/password/otp/send", "/admin/password/reset")
+				.requestMatchers("/admin/login", "/admin/login/resend-otp", "/admin/verify-otp", "/admin/password/otp/send", "/admin/password/reset")
 				.permitAll()
 				.requestMatchers("/upload/**").permitAll()
 				.requestMatchers("/OrgData/**","/accounts/**").permitAll()

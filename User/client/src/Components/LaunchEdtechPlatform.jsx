@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import api from "../api";
 import { decodeToken } from "../authConfig";
@@ -7,6 +7,9 @@ import { getApiErrorMessage } from "../utils/authPayload";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { portalLiveDisplay } from "../utils/portalLiveUtils";
 import { describeCountryCodeError } from "../utils/phoneCountryValidation";
+import { formatMobileForApi, parsePhonePrefill } from "../utils/phoneValidation";
+import { deriveLaunchContactLocks, resolveLaunchOtpRequirements } from "../utils/signupChannel";
+import { ensureContactAvailable } from "../utils/contactAvailability";
 
 const BASE_DOMAIN = "edukify.com";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -135,15 +138,191 @@ function isValidPhoneForCountry(code, digits) {
   return d.length >= 6 && d.length <= 15;
 }
 
-function parsePhonePrefill(rawPhone) {
-  const raw = String(rawPhone ?? "").trim();
-  if (!raw) return null;
-  const m = raw.match(/^\+(\d{1,4})\s*(.*)$/);
-  if (!m) return { countryCode: "+91", number: normalizeDigits(raw) };
-  const cc = `+${m[1]}`;
-  const rest = normalizeDigits(m[2]);
-  const known = COUNTRY_CODES.some((c) => c.code === cc) ? cc : "+91";
-  return { countryCode: known, number: rest };
+function createContactVerificationState() {
+  return {
+    email: { verified: false, locked: false, otpSent: false, otp: "", busy: false },
+    mobile: { verified: false, locked: false, otpSent: false, otp: "", busy: false },
+  };
+}
+
+function ContactFieldLabel({ label, verified, showVerify, onVerify, verifyBusy, verifyDisabled }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      {verified ? (
+        <span className="text-[11px] font-medium text-emerald-600">Verified</span>
+      ) : showVerify ? (
+        <button
+          type="button"
+          onClick={onVerify}
+          disabled={verifyBusy || verifyDisabled}
+          className="text-sm font-semibold text-blue-600 underline decoration-blue-600 underline-offset-2 hover:text-blue-700 hover:decoration-blue-700 disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50"
+        >
+          {verifyBusy ? "Sending…" : "Verify"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ContactOtpRow({ value, onChange, onConfirm, onResend, busy, error, disabled }) {
+  return (
+    <div className="mt-2 space-y-2">
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        placeholder="Enter 6-digit OTP"
+        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm tracking-[0.35em] shadow-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200 disabled:bg-slate-50"
+        value={value}
+        onChange={onChange}
+        disabled={disabled || busy}
+      />
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={disabled || busy || !/^\d{6}$/.test(String(value ?? "").replace(/\s+/g, ""))}
+          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? "Checking…" : "Confirm OTP"}
+        </button>
+        {onResend ? (
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={disabled || busy}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy ? "Sending…" : "Resend OTP"}
+          </button>
+        ) : null}
+      </div>
+      {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+function LaunchMobileContactField({
+  form,
+  errors,
+  contactVerification,
+  requireMobileOtp,
+  setField,
+  patchContactVerification,
+  validateStep1,
+  handleSendMobileOtp,
+  handleConfirmMobileOtp,
+  setErrors,
+}) {
+  const mobileLocked = contactVerification.mobile.locked;
+  const cc = String(form.phoneCountryCode ?? "").trim();
+  const phone = String(form.phoneNumber ?? "").trim();
+  const ccMsg = describeCountryCodeError(cc, COUNTRY_CODES);
+  const canVerifyMobile = !ccMsg && Boolean(phone) && isValidPhoneForCountry(cc, phone);
+
+  const resetMobileVerification = () => {
+    if (!mobileLocked) {
+      patchContactVerification("mobile", { verified: false, otpSent: false, otp: "" });
+    }
+  };
+
+  return (
+    <div className="block">
+      <ContactFieldLabel
+        label="Mobile"
+        verified={
+          contactVerification.mobile.verified &&
+          (requireMobileOtp || contactVerification.mobile.locked)
+        }
+        showVerify={requireMobileOtp && !contactVerification.mobile.verified && !mobileLocked}
+        onVerify={() => handleSendMobileOtp(false)}
+        verifyBusy={contactVerification.mobile.busy}
+        verifyDisabled={!canVerifyMobile || mobileLocked}
+      />
+      <div className="mt-1.5 flex gap-2">
+        <select
+          className={`w-[180px] rounded-xl border bg-white px-3 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+            errors.phoneCountryCode
+              ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+              : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+          } ${mobileLocked ? "bg-slate-50 text-slate-700" : ""}`}
+          value={form.phoneCountryCode}
+          onChange={(e) => {
+            setField("phoneCountryCode", e.target.value);
+            resetMobileVerification();
+          }}
+          onBlur={() => setErrors(validateStep1(form, contactVerification))}
+          required
+          disabled={mobileLocked}
+          aria-label="Country code"
+          aria-invalid={Boolean(errors.phoneCountryCode)}
+        >
+          {COUNTRY_CODES.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="tel"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          placeholder="Mobile number"
+          className={`flex-1 rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
+            errors.phoneNumber
+              ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+              : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
+          } ${mobileLocked ? "bg-slate-50 text-slate-700" : ""}`}
+          value={form.phoneNumber}
+          onChange={(e) => {
+            setField("phoneNumber", normalizeDigits(e.target.value));
+            resetMobileVerification();
+          }}
+          onBlur={() => setErrors(validateStep1(form, contactVerification))}
+          required
+          readOnly={mobileLocked}
+          aria-label="Mobile number"
+          aria-invalid={Boolean(errors.phoneNumber)}
+        />
+      </div>
+      {errors.phoneCountryCode ? (
+        <p className="mt-1 text-xs font-medium text-red-600">{errors.phoneCountryCode}</p>
+      ) : null}
+      {errors.phoneNumber ? (
+        <p className="mt-1 text-xs font-medium text-red-600">{errors.phoneNumber}</p>
+      ) : (
+        <p className="mt-1 text-[11px] text-slate-500">
+          Digits only. We validate by country.
+        </p>
+      )}
+      {requireMobileOtp && contactVerification.mobile.otpSent && !contactVerification.mobile.verified ? (
+        <ContactOtpRow
+          value={contactVerification.mobile.otp}
+          onChange={(e) => {
+            patchContactVerification("mobile", { otp: e.target.value });
+            if (errors.mobileVerification) {
+              setErrors((prev) => {
+                const next = { ...prev };
+                delete next.mobileVerification;
+                return next;
+              });
+            }
+          }}
+          onConfirm={handleConfirmMobileOtp}
+          onResend={() => handleSendMobileOtp(true)}
+          busy={contactVerification.mobile.busy}
+          error={errors.mobileVerification}
+        />
+      ) : null}
+      {requireMobileOtp &&
+      !contactVerification.mobile.verified &&
+      errors.mobileVerification &&
+      !contactVerification.mobile.otpSent ? (
+        <p className="mt-1 text-xs font-medium text-red-600">{errors.mobileVerification}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function formatTrialExpiryIso(isoDate) {
@@ -355,6 +534,8 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
   const [gateSubmitting, setGateSubmitting] = useState(false);
 
   const [errors, setErrors] = useState({});
+  const [contactVerification, setContactVerification] = useState(createContactVerificationState);
+  const [signupMode, setSignupMode] = useState("BOTH");
 
   const [form, setForm] = useState({
     contactPersonName: "",
@@ -404,6 +585,23 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
   }, [loadPortal]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get("/users/signup-mode");
+        if (!cancelled) {
+          setSignupMode(String(res.data?.mode || "BOTH").toUpperCase());
+        }
+      } catch {
+        if (!cancelled) setSignupMode("BOTH");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (userId == null || portal) return;
     let cancelled = false;
     (async () => {
@@ -412,13 +610,55 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
         const u = res.data ?? {};
         if (cancelled) return;
         const parsed = parsePhonePrefill(u.mobileNo || "");
+        const emailFromAccount = String(u.email ?? "").trim();
+        const mobileFromAccount = Boolean(parsed?.number);
+        const emailVerifiedFlag = Boolean(u.emailVerified);
+        const mobileVerifiedFlag = Boolean(u.mobileVerified);
+        const emailVerified =
+          emailVerifiedFlag || (emailFromAccount && !mobileFromAccount && !mobileVerifiedFlag);
+        const mobileVerified =
+          mobileVerifiedFlag || (mobileFromAccount && !emailFromAccount && !emailVerifiedFlag);
+        const contactLocks = deriveLaunchContactLocks(userId, u, parsed);
         setForm((f) => ({
           ...f,
           contactPersonName: u.userName || f.contactPersonName,
           phoneCountryCode: parsed?.countryCode || f.phoneCountryCode,
           phoneNumber: parsed?.number || f.phoneNumber,
-          email: u.email || f.email,
+          email: emailFromAccount || f.email,
         }));
+        setContactVerification({
+          email: {
+            verified: emailVerified,
+            locked: contactLocks.emailLocked,
+            otpSent: false,
+            otp: "",
+            busy: false,
+          },
+          mobile: {
+            verified: mobileVerified,
+            locked: contactLocks.mobileLocked,
+            otpSent: false,
+            otp: "",
+            busy: false,
+          },
+        });
+        if (userId != null) {
+          if (!emailVerifiedFlag && emailVerified) {
+            void api
+              .put(`/users/contact-verification/${userId}`, {
+                emailVerified: true,
+                email: emailFromAccount,
+              })
+              .catch(() => {});
+          } else if (!mobileVerifiedFlag && mobileVerified && parsed?.number) {
+            void api
+              .put(`/users/contact-verification/${userId}`, {
+                mobileVerified: true,
+                mobileNo: formatMobileForApi(parsed.countryCode, parsed.number),
+              })
+              .catch(() => {});
+          }
+        }
       } catch {
         /* optional prefill */
       }
@@ -428,7 +668,16 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
     };
   }, [userId, portal]);
 
-  const validateStep1 = (nextForm = form) => {
+  const launchOtpRequirements = useMemo(
+    () =>
+      resolveLaunchOtpRequirements(signupMode, {
+        emailLocked: contactVerification.email.locked,
+        mobileLocked: contactVerification.mobile.locked,
+      }),
+    [signupMode, contactVerification.email.locked, contactVerification.mobile.locked],
+  );
+
+  const validateStep1 = (nextForm = form, nextVerification = contactVerification) => {
     const e = {};
     const name = String(nextForm.contactPersonName ?? "").trim();
     const company = String(nextForm.companyName ?? "").trim();
@@ -452,7 +701,179 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
         "This mobile number doesn’t look valid for the selected country calling code. Check the number length and digits, or verify you picked the right country.";
     }
 
+    const otpReq = resolveLaunchOtpRequirements(signupMode, {
+      emailLocked: nextVerification.email.locked,
+      mobileLocked: nextVerification.mobile.locked,
+    });
+
+    if (otpReq.requireEmailOtp && !nextVerification.email.verified) {
+      e.emailVerification = "Verify your email to continue.";
+    }
+    if (otpReq.requireMobileOtp && !nextVerification.mobile.verified) {
+      e.mobileVerification = "Verify your mobile number to continue.";
+    }
+
     return e;
+  };
+
+  const patchContactVerification = (channel, patch) => {
+    setContactVerification((v) => ({ ...v, [channel]: { ...v[channel], ...patch } }));
+  };
+
+  const persistContactVerification = async (channel, payload) => {
+    if (userId == null) return;
+    await api.put(`/users/contact-verification/${userId}`, payload);
+  };
+
+  const ensureContactAvailableForUser = async (params) => {
+    await ensureContactAvailable(userId, params);
+  };
+
+  const handleSendEmailOtp = async (isResend = false) => {
+    const email = String(form.email ?? "").trim().toLowerCase();
+    if (!email || !EMAIL_RE.test(email)) {
+      setErrors((prev) => ({ ...prev, email: "Please enter a valid email address." }));
+      return;
+    }
+    patchContactVerification("email", { busy: true });
+    try {
+      await ensureContactAvailableForUser({ email });
+      await api.post("/users/otp/send", { email });
+      patchContactVerification("email", { busy: false, otpSent: true, otp: "" });
+      showSuccessToast(isResend ? "OTP resent to your email." : "OTP sent to your email.");
+    } catch (err) {
+      patchContactVerification("email", { busy: false });
+      const msg = err?.fieldMessage || getApiErrorMessage(err);
+      setErrors((prev) => ({ ...prev, email: msg }));
+    }
+  };
+
+  const handleConfirmEmailOtp = async () => {
+    const email = String(form.email ?? "").trim().toLowerCase();
+    const otp = String(contactVerification.email.otp ?? "").replace(/\s+/g, "");
+    if (!/^\d{6}$/.test(otp)) {
+      setErrors((prev) => ({ ...prev, emailVerification: "Enter a valid 6-digit OTP." }));
+      return;
+    }
+    patchContactVerification("email", { busy: true });
+    try {
+      await ensureContactAvailableForUser({ email });
+      await api.post("/users/otp/verify", { email, otp });
+    } catch (err) {
+      patchContactVerification("email", { busy: false });
+      const msg = err?.fieldMessage || getApiErrorMessage(err);
+      setErrors((prev) => ({ ...prev, emailVerification: msg, email: err?.fieldMessage ? msg : prev.email }));
+      return;
+    }
+
+    patchContactVerification("email", {
+      busy: false,
+      verified: true,
+      otpSent: false,
+      otp: "",
+    });
+    setErrors((prev) => {
+      if (!prev?.emailVerification) return prev;
+      const next = { ...prev };
+      delete next.emailVerification;
+      return next;
+    });
+    showSuccessToast("Email verified.");
+
+    try {
+      await persistContactVerification("email", { emailVerified: true, email });
+    } catch (err) {
+      const msg = getApiErrorMessage(err);
+      patchContactVerification("email", { verified: false, otpSent: false, busy: false, otp: "" });
+      setErrors((prev) => ({ ...prev, email: msg }));
+      showErrorToast(
+        msg || "Email was verified, but we could not save it to your profile. Try again or sign in again."
+      );
+    }
+  };
+
+  const handleSendMobileOtp = async (isResend = false) => {
+    const cc = String(form.phoneCountryCode ?? "").trim();
+    const phone = String(form.phoneNumber ?? "").trim();
+    const ccMsg = describeCountryCodeError(cc, COUNTRY_CODES);
+    if (ccMsg) {
+      setErrors((prev) => ({ ...prev, phoneCountryCode: ccMsg }));
+      return;
+    }
+    if (!phone) {
+      setErrors((prev) => ({ ...prev, phoneNumber: "Mobile number is required." }));
+      return;
+    }
+    if (!isValidPhoneForCountry(cc, phone)) {
+      setErrors((prev) => ({
+        ...prev,
+        phoneNumber:
+          "This mobile number doesn’t look valid for the selected country calling code. Check the number length and digits, or verify you picked the right country.",
+      }));
+      return;
+    }
+    const mobileNo = formatMobileForApi(cc, phone);
+    patchContactVerification("mobile", { busy: true });
+    try {
+      await ensureContactAvailableForUser({ mobileNo });
+      await api.post("/users/otp/mobile/send", { mobileNo });
+      patchContactVerification("mobile", { busy: false, otpSent: true, otp: "" });
+      showSuccessToast(isResend ? "OTP resent to your mobile." : "OTP sent to your mobile.");
+    } catch (err) {
+      patchContactVerification("mobile", { busy: false });
+      const msg = err?.fieldMessage || getApiErrorMessage(err);
+      setErrors((prev) => ({ ...prev, phoneNumber: msg }));
+    }
+  };
+
+  const handleConfirmMobileOtp = async () => {
+    const cc = String(form.phoneCountryCode ?? "").trim();
+    const phone = String(form.phoneNumber ?? "").trim();
+    const mobileNo = formatMobileForApi(cc, phone);
+    const otp = String(contactVerification.mobile.otp ?? "").replace(/\s+/g, "");
+    if (!/^\d{6}$/.test(otp)) {
+      setErrors((prev) => ({ ...prev, mobileVerification: "Enter a valid 6-digit OTP." }));
+      return;
+    }
+    patchContactVerification("mobile", { busy: true });
+    try {
+      await ensureContactAvailableForUser({ mobileNo });
+      await api.post("/users/otp/mobile/verify", { mobileNo, otp });
+    } catch (err) {
+      patchContactVerification("mobile", { busy: false });
+      const msg = err?.fieldMessage || getApiErrorMessage(err);
+      setErrors((prev) => ({
+        ...prev,
+        mobileVerification: msg,
+        phoneNumber: err?.fieldMessage ? msg : prev.phoneNumber,
+      }));
+      return;
+    }
+
+    patchContactVerification("mobile", {
+      busy: false,
+      verified: true,
+      otpSent: false,
+      otp: "",
+    });
+    setErrors((prev) => {
+      if (!prev?.mobileVerification) return prev;
+      const next = { ...prev };
+      delete next.mobileVerification;
+      return next;
+    });
+    showSuccessToast("Mobile verified.");
+
+    try {
+      await persistContactVerification("mobile", { mobileVerified: true, mobileNo });
+    } catch (err) {
+      const msg = getApiErrorMessage(err);
+      patchContactVerification("mobile", { verified: false, otpSent: false, busy: false, otp: "" });
+      setErrors((prev) => ({ ...prev, phoneNumber: msg }));
+      showErrorToast(
+        msg || "Mobile was verified, but we could not save it to your profile. Try again or sign in again."
+      );
+    }
   };
 
   const setField = (key, value) => {
@@ -490,7 +911,7 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
   };
 
   const handleFormNext = async () => {
-    const e = validateStep1(form);
+    const e = validateStep1(form, contactVerification);
     setErrors(e);
     if (Object.keys(e).length) return;
     try {
@@ -874,7 +1295,23 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
               ) : null}
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-slate-700">Email</span>
+              <ContactFieldLabel
+                label="Email"
+                verified={
+                  contactVerification.email.verified &&
+                  (launchOtpRequirements.requireEmailOtp || contactVerification.email.locked)
+                }
+                showVerify={
+                  launchOtpRequirements.requireEmailOtp &&
+                  !contactVerification.email.verified &&
+                  !contactVerification.email.locked
+                }
+                onVerify={() => handleSendEmailOtp(false)}
+                verifyBusy={contactVerification.email.busy}
+                verifyDisabled={
+                  !EMAIL_RE.test(String(form.email ?? "").trim()) || contactVerification.email.locked
+                }
+              />
               <input
                 type="email"
                 placeholder="name@company.com"
@@ -882,70 +1319,60 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
                   errors.email
                     ? "border-red-400 focus:border-red-500 focus:ring-red-100"
                     : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
-                }`}
+                } ${contactVerification.email.locked ? "bg-slate-50 text-slate-700" : ""}`}
                 value={form.email}
-                onChange={(e) => setField("email", e.target.value)}
-                onBlur={() => setErrors(validateStep1(form))}
+                onChange={(e) => {
+                  setField("email", e.target.value);
+                  if (!contactVerification.email.locked) {
+                    patchContactVerification("email", { verified: false, otpSent: false, otp: "" });
+                  }
+                }}
+                onBlur={() => setErrors(validateStep1(form, contactVerification))}
                 required
+                readOnly={contactVerification.email.locked}
                 aria-invalid={Boolean(errors.email)}
               />
               {errors.email ? <p className="mt-1 text-xs font-medium text-red-600">{errors.email}</p> : null}
-            </label>
-            <div className="block">
-              <label className="block">
-                <span className="text-sm font-semibold text-slate-700">Mobile</span>
-              </label>
-              <div className="mt-1.5 flex gap-2">
-                <select
-                  className={`w-[180px] rounded-xl border bg-white px-3 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
-                    errors.phoneCountryCode
-                      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
-                      : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
-                  }`}
-                  value={form.phoneCountryCode}
-                  onChange={(e) => setField("phoneCountryCode", e.target.value)}
-                  onBlur={() => setErrors(validateStep1(form))}
-                  required
-                  aria-label="Country code"
-                  aria-invalid={Boolean(errors.phoneCountryCode)}
-                >
-                  {COUNTRY_CODES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="Mobile number"
-                  className={`flex-1 rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition-shadow focus:outline-none focus:ring-2 ${
-                    errors.phoneNumber
-                      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
-                      : "border-slate-200 focus:border-sky-500 focus:ring-sky-200"
-                  }`}
-                  value={form.phoneNumber}
-                  onChange={(e) =>
-                    setField("phoneNumber", normalizeDigits(e.target.value))
-                  }
-                  onBlur={() => setErrors(validateStep1(form))}
-                  required
-                  aria-label="Mobile number"
-                  aria-invalid={Boolean(errors.phoneNumber)}
+              {launchOtpRequirements.requireEmailOtp &&
+              contactVerification.email.otpSent &&
+              !contactVerification.email.verified ? (
+                <ContactOtpRow
+                  value={contactVerification.email.otp}
+                  onChange={(e) => {
+                    patchContactVerification("email", { otp: e.target.value });
+                    if (errors.emailVerification) {
+                      setErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.emailVerification;
+                        return next;
+                      });
+                    }
+                  }}
+                  onConfirm={handleConfirmEmailOtp}
+                  onResend={() => handleSendEmailOtp(true)}
+                  busy={contactVerification.email.busy}
+                  error={errors.emailVerification}
                 />
-              </div>
-              {errors.phoneCountryCode ? (
-                <p className="mt-1 text-xs font-medium text-red-600">{errors.phoneCountryCode}</p>
               ) : null}
-              {errors.phoneNumber ? (
-                <p className="mt-1 text-xs font-medium text-red-600">{errors.phoneNumber}</p>
-              ) : (
-                <p className="mt-1 text-[11px] text-slate-500">
-                  We&apos;ll use this if we need to reach you. Digits only (6–15).
-                </p>
-              )}
-            </div>
+              {launchOtpRequirements.requireEmailOtp &&
+              !contactVerification.email.verified &&
+              errors.emailVerification &&
+              !contactVerification.email.otpSent ? (
+                <p className="mt-1 text-xs font-medium text-red-600">{errors.emailVerification}</p>
+              ) : null}
+            </label>
+            <LaunchMobileContactField
+              form={form}
+              errors={errors}
+              contactVerification={contactVerification}
+              requireMobileOtp={launchOtpRequirements.requireMobileOtp}
+              setField={setField}
+              patchContactVerification={patchContactVerification}
+              validateStep1={validateStep1}
+              handleSendMobileOtp={handleSendMobileOtp}
+              handleConfirmMobileOtp={handleConfirmMobileOtp}
+              setErrors={setErrors}
+            />
             <button
               type="button"
               onClick={handleFormNext}

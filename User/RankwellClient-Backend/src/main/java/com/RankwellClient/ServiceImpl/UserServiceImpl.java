@@ -20,6 +20,7 @@ import com.RankwellClient.dto.UserDto;
 import com.RankwellClient.entity.Users;
 import com.RankwellClient.repository.UserRepository;
 import com.RankwellClient.services.UserService;
+import com.RankwellClient.util.MobileNoUtil;
 //import com.RankwellClient.config.StoragePathResolver; 
 
 @Service
@@ -50,16 +51,20 @@ public class UserServiceImpl implements UserService {
         user.setEmail(userDto.getEmail());
         user.setMobileNo(userDto.getMobileNo());
         user.setPassword(hashedPassword);
+        user.setEmailVerified(userDto.isEmailVerified());
+        user.setMobileVerified(userDto.isMobileVerified());
         return userRepository.save(user);
     }
 
     @Override
     public String loginUser(String emailOrMobile, String password) {
-    	System.out.println(  emailOrMobile);
-        Optional<Users> userOptional = userRepository.findByEmail(emailOrMobile);
-
-		if (!userOptional.isPresent()) {
-            userOptional = userRepository.findByMobileNo(emailOrMobile);
+    	System.out.println(emailOrMobile);
+        Optional<Users> userOptional;
+        String identifier = emailOrMobile == null ? "" : emailOrMobile.trim();
+        if (identifier.contains("@")) {
+        	userOptional = userRepository.findByEmail(identifier.toLowerCase());
+        } else {
+        	userOptional = findUserByMobile(identifier);
         }
 
         if (userOptional.isPresent()){
@@ -76,6 +81,16 @@ public class UserServiceImpl implements UserService {
           } else {
             throw new RuntimeException("User not found");
          }
+    }
+
+    private Optional<Users> findUserByMobile(String mobile) {
+    	for (String variant : MobileNoUtil.lookupVariants(mobile, "+91")) {
+    		Optional<Users> user = userRepository.findByMobileNo(variant);
+    		if (user.isPresent()) {
+    			return user;
+    		}
+    	}
+    	return Optional.empty();
     }
     
 	@Override
@@ -139,6 +154,53 @@ public class UserServiceImpl implements UserService {
 			return "User Updated Successfully";
 		}
 		return "User not found";
+	}
+
+	@Override
+	public String updateContactVerification(Long userId, UserDto userDto) {
+		Optional<Users> userOpt = userRepository.findById(userId);
+		if (!userOpt.isPresent()) {
+			return "User not found";
+		}
+		Users user = userOpt.get();
+		if (userDto.isEmailVerified()) {
+			if (userDto.getEmail() != null && !userDto.getEmail().isBlank()) {
+				String normalizedEmail = userDto.getEmail().trim().toLowerCase();
+				Optional<Users> existingEmail = userRepository.findByEmail(normalizedEmail);
+				if (existingEmail.isPresent() && !existingEmail.get().getId().equals(userId)) {
+					return "Email not available for use.";
+				}
+				user.setEmail(normalizedEmail);
+			}
+			user.setEmailVerified(true);
+		}
+		if (userDto.isMobileVerified()) {
+			if (userDto.getMobileNo() != null && !userDto.getMobileNo().isBlank()) {
+				String normalizedMobile;
+				try {
+					normalizedMobile = MobileNoUtil.normalizeCompact(userDto.getMobileNo().trim(), "+91");
+				} catch (IllegalArgumentException e) {
+					normalizedMobile = userDto.getMobileNo().trim();
+				}
+				if (mobileOwnedByOtherUser(normalizedMobile, userId)) {
+					return "Mobile number not available for use.";
+				}
+				user.setMobileNo(normalizedMobile);
+			}
+			user.setMobileVerified(true);
+		}
+		userRepository.save(user);
+		return "Contact verification updated";
+	}
+
+	private boolean mobileOwnedByOtherUser(String mobileNo, Long userId) {
+		for (String variant : MobileNoUtil.lookupVariants(mobileNo, "+91")) {
+			Optional<Users> user = userRepository.findByMobileNo(variant);
+			if (user.isPresent() && !user.get().getId().equals(userId)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override

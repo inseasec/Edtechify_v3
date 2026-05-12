@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -17,15 +18,20 @@ import com.rankwell.admin.dto.ClientPortalRowDto;
 import com.rankwell.admin.dto.TrialDefaultsDto;
 import com.rankwell.admin.dto.TrialLimitsOverrideDto;
 import com.rankwell.admin.services.EdukifyClientAdminService;
+import com.rankwell.admin.services.UnusedAccountDeletionService;
 
 @RestController
 @RequestMapping("/clients")
 public class EdukifyClientController {
 
 	private final EdukifyClientAdminService eduClientAdminService;
+	private final UnusedAccountDeletionService unusedAccountDeletionService;
 
-	public EdukifyClientController(EdukifyClientAdminService eduClientAdminService) {
+	public EdukifyClientController(
+			EdukifyClientAdminService eduClientAdminService,
+			UnusedAccountDeletionService unusedAccountDeletionService) {
 		this.eduClientAdminService = eduClientAdminService;
+		this.unusedAccountDeletionService = unusedAccountDeletionService;
 	}
 
 	@GetMapping("/portal-rows")
@@ -83,6 +89,28 @@ public class EdukifyClientController {
 				m = "Not found";
 			}
 			return ResponseEntity.status(404).body(Map.of("message", m));
+		} catch (Exception ex) {
+			String m = ex.getMessage();
+			if (m == null || m.isBlank()) {
+				m = ex.getClass().getSimpleName();
+			}
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("message", m));
+		}
+	}
+
+	@DeleteMapping("/user/{userId}")
+	public ResponseEntity<?> deleteLaunchedClient(@PathVariable Long userId) {
+		try {
+			unusedAccountDeletionService.deleteLaunchedClientPermanent(userId);
+			return ResponseEntity.ok(Map.of("message", "Client record permanently removed."));
+		} catch (java.util.NoSuchElementException ex) {
+			return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "User not found."));
+		} catch (IllegalStateException ex) {
+			String m = ex.getMessage();
+			if (m == null || m.isBlank()) {
+				m = "Cannot delete this client.";
+			}
+			return ResponseEntity.badRequest().body(Map.of("message", m));
 		} catch (Exception ex) {
 			String m = ex.getMessage();
 			if (m == null || m.isBlank()) {

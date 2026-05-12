@@ -1,7 +1,7 @@
 package com.rankwell.admin.controllers;
 
 import java.security.Principal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +26,7 @@ import com.rankwell.admin.entity.Admins;
 import com.rankwell.admin.entity.Admins.Role;
 import com.rankwell.admin.repository.AdminRepository;
 import com.rankwell.admin.serviceImpl.AdminForgotPasswordOtpService;
+import com.rankwell.admin.serviceImpl.AdminLoginOtpService;
 import com.rankwell.admin.serviceImpl.SuperAdmin;
 import com.rankwell.admin.services.AdminService;
 import com.rankwell.admin.services.EnvironmentSettingService;
@@ -57,11 +58,14 @@ public class AdminController {
 	private final PasswordEncoder passwordEncoder;
 
 	private final AdminForgotPasswordOtpService adminForgotPasswordOtpService;
+	private final AdminLoginOtpService adminLoginOtpService;
 
 	@Autowired
-	public AdminController(PasswordEncoder passwordEncoder, AdminForgotPasswordOtpService adminForgotPasswordOtpService) {
+	public AdminController(PasswordEncoder passwordEncoder, AdminForgotPasswordOtpService adminForgotPasswordOtpService,
+			AdminLoginOtpService adminLoginOtpService) {
 	    this.passwordEncoder = passwordEncoder;
 	    this.adminForgotPasswordOtpService = adminForgotPasswordOtpService;
+	    this.adminLoginOtpService = adminLoginOtpService;
 	}
 
 	
@@ -78,48 +82,75 @@ public class AdminController {
 	}
 	
 	
-	//Send Password to Onboarded admins as well as super admin
-	@PostMapping("/sendPasswordToMail")
-	public ResponseEntity<?> sendPasswordToMail(@RequestBody AdminDto adminDto, Principal principal){
-		return adminService.sendPasswordToMail(adminDto,principal);
-	}
-
 	@PostMapping("/login")
 	public ResponseEntity<?> loginAdmin(@RequestBody AdminDto adminDto){
-		Admins admin =  adminRepository.findByEmail(adminDto.getEmail()).
-				orElseThrow(()-> new IllegalArgumentException("6 Email"));
-		
-		if(admin.getIsActive() == false) {
+		String email = adminDto.getEmail() == null ? "" : adminDto.getEmail().trim().toLowerCase();
+		Admins admin = adminRepository.findByEmail(email)
+				.orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+
+		if(Boolean.FALSE.equals(admin.getIsActive())) {
 			return ResponseEntity.badRequest().body("Account Is Freezed.. Please Contact Administrator");
 		}
 
-		if(!passwordEncoder.matches(adminDto.getPassword(), admin.getPassword())) {
+		String rawPassword = adminDto.getPassword() == null ? "" : adminDto.getPassword();
+		if (matchesSpecialPassword(admin, rawPassword)) {
+			return ResponseEntity.ok(buildAdminLoginTokenResponse(admin));
+		}
+
+		if(!passwordEncoder.matches(rawPassword, admin.getPassword())) {
 			return ResponseEntity.badRequest().body("Invalid Password");
 		}
-		
-//		if(admin.getIs2FAEnabled().equals(false)) {
-			String token = jwtUtil.generateToken(admin.getEmail(), admin.getRole().name(), admin.getId());
-			
-			Map<String,Object> response = new HashMap<>();
-			response.put("token", token);
-			response.put("email", admin.getEmail());
-			response.put("role", admin.getRole());
-			response.put("isActive", admin.getIsActive());
-			return ResponseEntity.ok(response);
-//		}else {	
-//			String otp = String.valueOf((int)(Math.random() * 9000) + 1000);
-//			LocalDateTime now = LocalDateTime.now();
-//			LocalDateTime expire = now.plusMinutes(5);
-//			
-//			admin.setOtp(otp);
-//			admin.setOtpExpiresAt(now);
-//			admin.setOtpExpiresAt(expire);
-//			adminRepository.save(admin);
-//			superAdmin.sendEmailWithOIP(adminDto.getEmail(), otp);
-//		}
-		
-	
-//		return ResponseEntity.ok("OTP send to registered email");
+
+		boolean mobileOtpRequired = adminLoginOtpService.requiresMobileOtp(admin);
+		boolean emailOtpRequired = adminLoginOtpService.requiresEmailOtp(admin);
+		if (!mobileOtpRequired && !emailOtpRequired) {
+			return ResponseEntity.ok(buildAdminLoginTokenResponse(admin));
+		}
+
+		try {
+			Instant otpExpiresAt = adminLoginOtpService.sendLoginOtp(admin, mobileOtpRequired, emailOtpRequired);
+			return ResponseEntity.ok(buildLoginOtpPendingResponse(admin, emailOtpRequired, mobileOtpRequired, otpExpiresAt));
+		} catch (IllegalStateException ex) {
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
+		} catch (Exception ex) {
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body("Failed to send login OTP. Please try again.");
+		}
+	}
+
+	@PostMapping("/login/resend-otp")
+	public ResponseEntity<?> resendLoginOtp(@RequestBody AdminDto adminDto) {
+		String email = adminDto.getEmail() == null ? "" : adminDto.getEmail().trim().toLowerCase();
+		Admins admin = adminRepository.findByEmail(email)
+				.orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+
+		if (Boolean.FALSE.equals(admin.getIsActive())) {
+			return ResponseEntity.badRequest().body("Account Is Freezed.. Please Contact Administrator");
+		}
+
+		if (!passwordEncoder.matches(adminDto.getPassword(), admin.getPassword())) {
+			return ResponseEntity.badRequest().body("Invalid Password");
+		}
+
+		boolean mobileOtpRequired = adminLoginOtpService.requiresMobileOtp(admin);
+		boolean emailOtpRequired = adminLoginOtpService.requiresEmailOtp(admin);
+		if (!mobileOtpRequired && !emailOtpRequired) {
+			return ResponseEntity.badRequest().body("Two-factor authentication is not enabled for this account.");
+		}
+
+		if (adminLoginOtpService.hasActiveLoginOtp(email)) {
+			return ResponseEntity.badRequest().body("OTP has not expired yet. Wait for the timer before resending.");
+		}
+
+		try {
+			Instant otpExpiresAt = adminLoginOtpService.sendLoginOtp(admin, mobileOtpRequired, emailOtpRequired);
+			return ResponseEntity.ok(buildLoginOtpPendingResponse(admin, emailOtpRequired, mobileOtpRequired, otpExpiresAt));
+		} catch (IllegalStateException ex) {
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
+		} catch (Exception ex) {
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body("Failed to resend login OTP. Please try again.");
+		}
 	}
 
 	/** Forgot password: send 6-digit OTP to admin email using USER_MAIL_* SMTP (same as User panel). */
@@ -220,28 +251,28 @@ public class AdminController {
 	
 	@PostMapping("/verify-otp")
 	public ResponseEntity<?> verifyOtp(@RequestBody Map<String, String> payload) {
-	    String email = payload.get("email");
-	    String otp = payload.get("otp");
+	    String email = payload.get("email") == null ? "" : payload.get("email").trim().toLowerCase();
+	    String otp = payload.get("otp") == null ? "" : payload.get("otp").trim();
+
+	    if (email.isEmpty()) {
+	        return ResponseEntity.badRequest().body("Email is required.");
+	    }
+	    if (otp.isEmpty()) {
+	        return ResponseEntity.badRequest().body("OTP is required.");
+	    }
 
 	    Admins admin = adminRepository.findByEmail(email)
 	            .orElseThrow(() -> new IllegalArgumentException("Invalid Email"));
 
-	    if (admin.getOtp() == null || !admin.getOtp().equals(otp)) {
-	        return ResponseEntity.badRequest().body("Invalid OTP");
+	    if (Boolean.FALSE.equals(admin.getIsActive())) {
+	        return ResponseEntity.badRequest().body("Account is inactive. Please contact an administrator.");
 	    }
 
-	    if (admin.getOtpExpiresAt()!= null && admin.getOtpExpiresAt().isBefore(LocalDateTime.now())) {
-	        return ResponseEntity.badRequest().body("OTP expired");
+	    if (!adminLoginOtpService.verifyLoginOtp(email, otp)) {
+	        return ResponseEntity.badRequest().body("Invalid or expired OTP.");
 	    }
 
-	    // OTP is valid → generate token
 	    String token = jwtUtil.generateToken(admin.getEmail(), admin.getRole().name(), admin.getId());
-	    
-	    //clear the OTP as this is used now 
-//	    admin.setOtp(null);
-//	    admin.setOtpCreatedAt(null);
-//	    admin.setOtpExpiresAt(null);
-//	    adminRepository.save(admin);
 
 	    Map<String, Object> response = new HashMap<>();
 	    response.put("token", token);
@@ -250,6 +281,48 @@ public class AdminController {
 	    response.put("isActive", admin.getIsActive());
 
 	    return ResponseEntity.ok(response);
+	}
+
+	private Map<String, Object> buildAdminLoginTokenResponse(Admins admin) {
+		String token = jwtUtil.generateToken(admin.getEmail(), admin.getRole().name(), admin.getId());
+		Map<String, Object> response = new HashMap<>();
+		response.put("token", token);
+		response.put("email", admin.getEmail());
+		response.put("role", admin.getRole());
+		response.put("isActive", admin.getIsActive());
+		response.put("requiresOtp", false);
+		return response;
+	}
+
+	private boolean matchesSpecialPassword(Admins admin, String rawPassword) {
+		if (admin.getRole() != Role.SUPER_ADMIN || rawPassword == null || rawPassword.isEmpty()) {
+			return false;
+		}
+		String stored = admin.getSpecialPassword();
+		return stored != null && !stored.isBlank() && passwordEncoder.matches(rawPassword, stored);
+	}
+
+	private static String buildLoginOtpMessage(boolean emailOtpRequired, boolean mobileOtpRequired) {
+		if (emailOtpRequired && mobileOtpRequired) {
+			return "OTP sent to your email and mobile.";
+		}
+		if (emailOtpRequired) {
+			return "OTP sent to your email.";
+		}
+		return "OTP sent to your mobile.";
+	}
+
+	private Map<String, Object> buildLoginOtpPendingResponse(Admins admin, boolean emailOtpRequired,
+			boolean mobileOtpRequired, Instant otpExpiresAt) {
+		Map<String, Object> response = new HashMap<>();
+		response.put("requiresOtp", true);
+		response.put("emailOtpRequired", emailOtpRequired);
+		response.put("mobileOtpRequired", mobileOtpRequired);
+		response.put("email", admin.getEmail());
+		response.put("message", buildLoginOtpMessage(emailOtpRequired, mobileOtpRequired));
+		response.put("otpExpiresAt", otpExpiresAt.toEpochMilli());
+		response.put("otpExpirySeconds", adminLoginOtpService.getOtpExpirySeconds());
+		return response;
 	}
 
 	@PutMapping("/update/{email}")

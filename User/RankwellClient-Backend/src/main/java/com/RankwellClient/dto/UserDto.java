@@ -13,6 +13,8 @@ public class UserDto {
 	private String city;
 	private String state;
 	private String postalCode;
+	private boolean emailVerified;
+	private boolean mobileVerified;
 	
 	public UserDto() {
 		super();
@@ -90,6 +92,22 @@ public class UserDto {
 	}
 	public void setPostalCode(String postalCode) {
 		this.postalCode = postalCode;
+	}
+
+	public boolean isEmailVerified() {
+		return emailVerified;
+	}
+
+	public void setEmailVerified(boolean emailVerified) {
+		this.emailVerified = emailVerified;
+	}
+
+	public boolean isMobileVerified() {
+		return mobileVerified;
+	}
+
+	public void setMobileVerified(boolean mobileVerified) {
+		this.mobileVerified = mobileVerified;
 	}
 
 	public UserDto(Long id, String email, String mobileNo, String password, boolean isPaid, String userName,

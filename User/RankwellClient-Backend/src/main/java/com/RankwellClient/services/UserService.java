@@ -15,6 +15,7 @@ public interface UserService {
 	ResponseEntity<String> uploadUserImage(Long userId, MultipartFile file);
 	Users getUser(Long userId);
 	String updateUserInfo(Long userId, UserDto userDto);
+	String updateContactVerification(Long userId, UserDto userDto);
 	String updateUserAddress(Long userId, UserDto userDto);
 	String updatePassword(Long userId ,Map<String, String> passwordInfo); 
 	 

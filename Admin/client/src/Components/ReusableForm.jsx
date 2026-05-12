@@ -1,4 +1,24 @@
 import { useState, useEffect } from 'react'
+import { COUNTRY_CODES, DEFAULT_PHONE_COUNTRY_CODE } from '@/constants/countryCodes'
+import {
+  formatMobileForApi,
+  mobileFieldKeys,
+  normalizeDigits,
+  parsePhonePrefill,
+} from '@/utils/phoneMobile'
+
+function applyMobileFieldDefaults(values, fields) {
+  const next = { ...values }
+  fields.forEach((field) => {
+    if (field.type !== 'mobile') return
+    const { countryCode, national } = mobileFieldKeys(field.name)
+    const parsed = parsePhonePrefill(next[field.name])
+    next[countryCode] = parsed.countryCode || DEFAULT_PHONE_COUNTRY_CODE
+    next[national] = parsed.number ?? ''
+    next[field.name] = String(next[field.name] ?? '')
+  })
+  return next
+}
 
 function normalizeInitials(initialValues, fields) {
   const base = {
@@ -6,18 +26,25 @@ function normalizeInitials(initialValues, fields) {
     email: '',
     password: '',
     role: '',
-    departments: [],
+    mobileNo: '',
     ...initialValues,
   }
-  let deps = base.departments
-  if (Array.isArray(deps) && deps.length > 0 && typeof deps[0] === 'object' && deps[0] !== null) {
-    deps = deps.map((d) => String(d.id ?? d))
-  } else if (!Array.isArray(deps)) {
-    deps = []
-  } else {
-    deps = deps.map(String)
-  }
-  return { ...base, departments: deps }
+  return applyMobileFieldDefaults(
+    { ...base, mobileNo: String(base.mobileNo ?? '') },
+    fields,
+  )
+}
+
+function buildSubmitValues(values, fields) {
+  const payload = { ...values }
+  fields.forEach((field) => {
+    if (field.type !== 'mobile') return
+    const { countryCode, national } = mobileFieldKeys(field.name)
+    payload[field.name] = formatMobileForApi(payload[countryCode], payload[national])
+    delete payload[countryCode]
+    delete payload[national]
+  })
+  return payload
 }
 
 export default function ReusableForm({
@@ -36,21 +63,7 @@ export default function ReusableForm({
   }, [JSON.stringify(initialValues)])
 
   const setField = (name, value) => {
-    setValues((prev) => {
-      const next = { ...prev, [name]: value }
-      if (name === 'role' && value === 'HR') next.departments = []
-      return next
-    })
-  }
-
-  const toggleDept = (fieldName, optionValue, checked) => {
-    const v = String(optionValue)
-    setValues((prev) => {
-      const set = new Set(prev[fieldName] || [])
-      if (checked) set.add(v)
-      else set.delete(v)
-      return { ...prev, [fieldName]: Array.from(set) }
-    })
+    setValues((prev) => ({ ...prev, [name]: value }))
   }
 
   return (
@@ -58,7 +71,7 @@ export default function ReusableForm({
       className="space-y-4 max-h-[70vh] overflow-y-auto pr-1"
       onSubmit={async (e) => {
         e.preventDefault()
-        await onSubmit(values)
+        await onSubmit(buildSubmitValues(values, fields))
       }}
     >
       {fields.map((field) => {
@@ -67,21 +80,15 @@ export default function ReusableForm({
         if (field.type === 'checkbox') {
           return (
             <div key={field.name}>
-              <label className="block text-sm font-medium text-gray-700 mb-2">{field.label}</label>
-              <div className="flex flex-wrap gap-3">
-                {field.options?.map((opt) => (
-                  <label key={String(opt.value)} className="flex items-center gap-2 text-sm text-gray-800">
-                    <input
-                      type="checkbox"
-                      checked={(values[field.name] || []).includes(String(opt.value))}
-                      onChange={(e) => toggleDept(field.name, opt.value, e.target.checked)}
-                      disabled={field.readOnly}
-                      className="rounded border-gray-300"
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(values[field.name])}
+                  disabled={field.readOnly}
+                  onChange={(e) => setField(field.name, e.target.checked)}
+                />
+                <span>{field.label}</span>
+              </label>
             </div>
           )
         }
@@ -103,6 +110,39 @@ export default function ReusableForm({
                   </option>
                 ))}
               </select>
+            </div>
+          )
+        }
+
+        if (field.type === 'mobile') {
+          const { countryCode, national } = mobileFieldKeys(field.name)
+          return (
+            <div key={field.name}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
+              <div className="flex gap-2">
+                <select
+                  value={values[countryCode] ?? DEFAULT_PHONE_COUNTRY_CODE}
+                  disabled={field.readOnly}
+                  onChange={(e) => setField(countryCode, e.target.value)}
+                  aria-label="Country code"
+                  className="w-[180px] shrink-0 border border-gray-300 rounded-lg px-2 py-2 text-sm bg-white disabled:bg-gray-100"
+                >
+                  {COUNTRY_CODES.map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  readOnly={field.readOnly}
+                  placeholder={field.placeholder || 'Mobile number'}
+                  value={values[national] ?? ''}
+                  onChange={(e) => setField(national, normalizeDigits(e.target.value))}
+                  className="min-w-0 flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white read-only:bg-gray-50"
+                />
+              </div>
             </div>
           )
         }

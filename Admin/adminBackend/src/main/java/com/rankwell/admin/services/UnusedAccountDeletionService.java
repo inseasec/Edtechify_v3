@@ -25,9 +25,9 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
 /**
- * Permanent removal for accounts that signed up but never launched a portal ({@code clients} row).
- * Deletes dependent billing rows and user media under configured storage ({@code accounts/…},
- * paths stored on {@link Users#getUserImg()}).
+ * Permanent account removal: unused signups (no {@code clients} row) and launched clients
+ * removed from the Clients subscription list. Deletes dependent billing rows and user media under
+ * configured storage ({@code accounts/…}, paths stored on {@link Users#getUserImg()}).
  */
 @Service
 public class UnusedAccountDeletionService {
@@ -63,6 +63,20 @@ public class UnusedAccountDeletionService {
 			throw new IllegalStateException(
 					"This user has launched a portal. Manage or remove them from Clients instead.");
 		}
+		deleteUserAccountCascade(uid);
+	}
+
+	@Transactional
+	public void deleteLaunchedClientPermanent(Long userId) {
+		Long uid = Objects.requireNonNull(userId, "userId");
+		if (eduClientRepository.findByUserId(uid).isEmpty()) {
+			throw new IllegalStateException("No launched portal for this user.");
+		}
+		eduClientRepository.deleteByUserId(uid);
+		deleteUserAccountCascade(uid);
+	}
+
+	private void deleteUserAccountCascade(Long uid) {
 		Users user = userRepository.findById(uid)
 				.orElseThrow(() -> new NoSuchElementException("User not found"));
 
