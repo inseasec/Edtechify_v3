@@ -1,6 +1,7 @@
 package com.rankwell.admin.controllers;
 
 import java.security.Principal;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import com.rankwell.admin.services.PaymentConfigService;
@@ -72,6 +73,27 @@ public class PaymentConfigController {
 
 
         return ResponseEntity.ok(config);
+    }
+
+    // Validates a key/secret pair against Razorpay's live API without saving anything.
+    // Lets super-admins confirm credentials *before* hitting Save and discovering the
+    // problem only when a real user attempts a payment.
+    @PostMapping("/test")
+    public ResponseEntity<?> testConnection(@RequestBody PaymentGatewayConfig config, Principal principal) {
+
+        String loggedInEmail = principal.getName();
+
+        Admins loggedInAdmin = adminRepository.findByEmail(loggedInEmail)
+                .orElseThrow(() -> new IllegalArgumentException("LoggedIn Admin Not Found"));
+
+        if (loggedInAdmin.getRole() != Admins.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Access denied. Only Super Admin can test payment configuration.");
+        }
+
+        Map<String, Object> result = paymentConfigService.testConnection(
+                config.getRazorpayKey(), config.getRazorpaySecret());
+        return ResponseEntity.ok(result);
     }
 
 }

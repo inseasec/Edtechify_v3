@@ -71,22 +71,38 @@ const BillingInvoices = () => {
     const q = searchTerm.toLowerCase()
     const Filtered = invoices.filter((item) => {
       try {
-        const courseName = item.payment?.courses?.[0]?.courseName ?? ''
-        const userName = item.users?.userName ?? ''
-        const dept = item.payment?.courses?.[0]?.departments?.deptName ?? ''
+        // Match the columns actually shown in the table: Invoice Id, Invoice
+        // Date, Plan, Customer Name, Login Mobile. We test both the raw ISO
+        // date and the DD/MM/YYYY display so users can type "13/05" or
+        // "2026-05" alike. Mobile is normalized so trailing/leading spaces or
+        // a leading "+" / country code don't break partial searches.
         const invId = String(item.invoiceId ?? '')
+        const planName = String(item?.itemName ?? '')
+        const customerName =
+          clientCompanyByUserId[String(item?.users?.id)] ||
+          item?.users?.userName ||
+          ''
+        const invDateIso = String(item?.invoiceDate ?? '').slice(0, 10)
+        const invDateDisplay = formattedDate(item?.invoiceDate)
+        const mobile = String(item?.users?.mobileNo ?? '')
+        const mobileDigits = mobile.replace(/\D+/g, '')
+        const qDigits = q.replace(/\D+/g, '')
+
         return (
-          courseName.toLowerCase().includes(q) ||
-          userName.toLowerCase().includes(q) ||
-          dept.toLowerCase().includes(q) ||
-          invId.toLowerCase().includes(q)
+          invId.toLowerCase().includes(q) ||
+          planName.toLowerCase().includes(q) ||
+          customerName.toLowerCase().includes(q) ||
+          invDateIso.toLowerCase().includes(q) ||
+          invDateDisplay.toLowerCase().includes(q) ||
+          mobile.toLowerCase().includes(q) ||
+          (qDigits.length > 0 && mobileDigits.includes(qDigits))
         )
       } catch {
         return false
       }
     })
     setSearchResults(Filtered)
-  }, [searchTerm, invoices])
+  }, [searchTerm, invoices, clientCompanyByUserId])
 
   const formattedDate = (datestr) => {
     if (!datestr) return ''
@@ -123,18 +139,20 @@ const BillingInvoices = () => {
         <input
           type="text"
           value={searchTerm}
-          placeholder="Search by username, coursename, department or invoiceId"
+          placeholder="Search by invoice no, customer name, plan, invoice date or login mobile"
           className="w-[60vh] rounded-md border border-[orange] p-1"
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-      <table className="min-w-full overflow-hidden rounded-lg border border-gray-300 bg-white shadow-md">
+      <div className="overflow-x-auto show-scrollbar rounded-lg border border-gray-300 bg-white shadow-md">
+      <table className="w-full min-w-[1100px] overflow-hidden">
         <thead>
           <tr className="bg-[#F97316] text-sm text-white">
             <th className="px-2 py-2">Invoice Id</th>
             <th className="px-2 py-2">Invoice Date</th>
             <th className="px-2 py-2">Plan</th>
             <th className="px-2 py-2">Customer Name</th>
+            <th className="px-2 py-2 whitespace-nowrap">Login Mobile</th>
             <th className="px-2 py-2">Status</th>
             <th className="px-2 py-2">Download</th>
             <th className="px-2 py-2">More</th>
@@ -154,6 +172,9 @@ const BillingInvoices = () => {
               </td>
               <td className="px-4 py-3">
                 {clientCompanyByUserId[String(invoice?.users?.id)] || invoice?.users?.userName || '—'}
+              </td>
+              <td className="px-4 py-3 text-center whitespace-nowrap">
+                {invoice?.users?.mobileNo || '—'}
               </td>
               <td className="px-4 py-3 text-center">{invoice.payment?.status}</td>
               <td className="px-4 py-3 text-center">
@@ -185,6 +206,7 @@ const BillingInvoices = () => {
           ))}
         </tbody>
       </table>
+      </div>
       <div className="mt-2 flex items-center justify-center gap-2">
         <button type="button" onClick={handlePrevious} className="rounded-md border border-grey-500 p-2">
           Prev

@@ -114,7 +114,11 @@ function MyAccount() {
   );
 
   return (
-    <div className="w-full max-w-none bg-gradient-to-b from-sky-50/40 via-white to-white">
+    // min-h-[calc(100vh-5rem)] reserves one viewport (minus the ~80px sticky
+    // navbar) so the gradient page area never collapses on big monitors when
+    // a sub-tab has sparse content (e.g. Billing with 2 rows, Change Password).
+    // Keeps Footer below the fold consistently across all account sub-pages.
+    <div className="w-full max-w-none bg-gradient-to-b from-sky-50/40 via-white to-white min-h-[calc(100vh-5rem)]">
       <div className="relative mx-auto flex w-full max-w-[90rem] flex-col gap-6 px-3 py-6 md:flex-row md:items-start md:gap-4 md:px-4 lg:gap-6 lg:px-5 lg:py-10 xl:gap-8 xl:px-6">
         <button
           type="button"
@@ -180,7 +184,7 @@ function MyAccount() {
           </div>
         </aside>
 
-        <main className="relative min-h-[320px] min-w-0 flex-1 rounded-2xl border border-sky-50 bg-white/80 px-4 py-6 shadow-sm sm:px-6 md:rounded-3xl md:border-sky-100 md:px-6 md:py-10 lg:px-7 xl:px-8">
+        <main className="relative min-h-[calc(100vh-9rem)] min-w-0 flex-1 rounded-2xl border border-sky-50 bg-white/80 px-4 py-6 shadow-sm sm:px-6 md:rounded-3xl md:border-sky-100 md:px-6 md:py-10 lg:px-7 xl:px-8">
           {renderComponent()}
         </main>
       </div>

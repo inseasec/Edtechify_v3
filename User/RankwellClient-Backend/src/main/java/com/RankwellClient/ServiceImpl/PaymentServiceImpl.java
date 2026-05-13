@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +34,9 @@ import com.razorpay.Utils;
 
 @Service
 public class PaymentServiceImpl implements PaymentService{
-	
+
+	private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
+
 	@Autowired
 	private PaymentRepository paymentRepository;
 	
@@ -50,7 +54,8 @@ public class PaymentServiceImpl implements PaymentService{
 
 	@Override
 	public String createOrder(Map<String,Object> paymentInfo) {
-		 try {
+		String apiKey = null;
+		try {
 	            // RazorpayClient razorpay = new RazorpayClient("rzp_test_SfJE8AacngfWrb", "7ceL8L7OJ2pu93CL9X6biavN"); // Our old account rankwell previously used one.
 	
 				// Akshay's account credentials for testing razorpay account.
@@ -63,7 +68,7 @@ public class PaymentServiceImpl implements PaymentService{
 					throw new RuntimeException("Razorpay configuration not found. Please configure it from Admin Panel.");
 				}
 
-				String apiKey = normalizeCredential(config.getRazorpayKey());
+				apiKey = normalizeCredential(config.getRazorpayKey());
 				String apiSecret = normalizeCredential(config.getRazorpaySecret());
 
 				RazorpayClient razorpay = new RazorpayClient(apiKey, apiSecret);
@@ -136,8 +141,15 @@ public class PaymentServiceImpl implements PaymentService{
 
 	            return order.toString(); 
 
+	        } catch (RazorpayException e) {
+	            // Razorpay's REST API rejected the request. The most common cause we see
+	            // is wrong key/secret on the dashboard (returns "Authentication failed").
+	            // Log the masked key + the verbatim Razorpay message so this is greppable
+	            // next time without unwinding a full stack trace.
+	            log.error("Razorpay order creation rejected (key={}): {}", maskKey(apiKey), e.getMessage());
+	            return "Error: " + e.getMessage();
 	        } catch (Exception e) {
-	            e.printStackTrace();
+	            log.error("Razorpay order creation failed unexpectedly (key={}): {}", maskKey(apiKey), e.getMessage(), e);
 	            return "Error: " + e.getMessage();
 	        }
 	}
@@ -194,23 +206,68 @@ public class PaymentServiceImpl implements PaymentService{
 					return ResponseEntity.ok("Payment verified, but invoice generation failed: " + e.getMessage());
 				}
 
-				// Apply subscription plan limits to the launched portal (clients table)
+				// Apply subscription plan limits to the launched portal (clients table).
+				// Rule set:
+				//   • First paid purchase (still on Trial OR null) → REPLACE the
+				//     trial's expiry/storage with this plan's values (no trial
+				//     bonus is carried over).
+				//   • Active paid subscription (trialExpiresOn in the future) →
+				//     EXTEND expiry by plan.durationDays AND ADD plan.storageLimitMb
+				//     to the existing allocated storage.
+				//   • Expired paid subscription → treat like first paid purchase
+				//     (REPLACE), because the user has effectively lapsed and is
+				//     starting a fresh active period.
 				if (payment.getSubscriptionPlanId() != null && payment.getUser() != null && payment.getUser().getId() != null) {
 					SubscriptionPlan plan = subscriptionPlanRepository.findById(payment.getSubscriptionPlanId()).orElse(null);
 					if (plan != null) {
 						EdukifyClient client = edukifyClientRepository.findByUserId(payment.getUser().getId()).orElse(null);
 						if (client != null) {
-							Integer days = plan.getDurationDays() != null ? plan.getDurationDays() : 0;
-							Integer mb = plan.getStorageLimitMb() != null ? plan.getStorageLimitMb() : null;
+							int days = plan.getDurationDays() != null && plan.getDurationDays() > 0
+									? plan.getDurationDays() : 0;
+							int planMb = plan.getStorageLimitMb() != null && plan.getStorageLimitMb() > 0
+									? plan.getStorageLimitMb() : 0;
 							LocalDate today = LocalDate.now();
-							LocalDate endInclusive = (days != null && days > 0) ? today.plusDays(days.longValue() - 1L) : null;
 
-							// Show plan name in UIs (admin grid + user portal) instead of generic "Subscription".
+							boolean hasActivePaidSubscription =
+									client.getSubscription() != null
+									&& !"Trial".equalsIgnoreCase(client.getSubscription())
+									&& client.getTrialExpiresOn() != null
+									&& !client.getTrialExpiresOn().isBefore(today);
+
+							LocalDate newExpiry = null;
+							Integer newStorageMb = null;
+
+							if (hasActivePaidSubscription) {
+								// Extend expiry by exactly the new plan's days, add storage.
+								if (days > 0) {
+									newExpiry = client.getTrialExpiresOn().plusDays(days);
+								}
+								if (planMb > 0) {
+									Integer existingMb = client.getTrialLimitStorageMb();
+									newStorageMb = (existingMb != null ? existingMb : 0) + planMb;
+								}
+							} else {
+								// First paid purchase OR lapsed plan — wipe trial bonus,
+								// set caps strictly to what the new plan grants.
+								if (days > 0) {
+									newExpiry = today.plusDays(days - 1L);
+								}
+								if (planMb > 0) {
+									newStorageMb = planMb;
+								}
+							}
+
+							// Show the most recently purchased plan name in the UIs;
+							// the running caps live in trialLimitStorageMb / trialExpiresOn.
 							client.setSubscription(plan.getName());
 							client.setPortalAccessStatus("ACTIVE");
-							client.setTrialLimitDays(days != null && days > 0 ? days : null);
-							client.setTrialLimitStorageMb(mb);
-							client.setTrialExpiresOn(endInclusive);
+							client.setTrialLimitDays(days > 0 ? days : null);
+							if (newStorageMb != null) {
+								client.setTrialLimitStorageMb(newStorageMb);
+							}
+							if (newExpiry != null) {
+								client.setTrialExpiresOn(newExpiry);
+							}
 							edukifyClientRepository.save(client);
 						}
 					}
@@ -222,6 +279,14 @@ public class PaymentServiceImpl implements PaymentService{
 	
 	private static String normalizeCredential(String value) {
 		return value != null ? value.trim() : null;
+	}
+
+	// Razorpay key IDs like `rzp_test_SiwDl2vGkbFqhA` already aren't secret, but
+	// we still mask after the mode prefix so logs are safer to share / copy-paste.
+	private static String maskKey(String key) {
+		if (key == null || key.isEmpty()) return "(unset)";
+		if (key.length() <= 12) return key;
+		return key.substring(0, 12) + "***";
 	}
 	
 //	@Scheduled(fixedDelay  = 60000) // Every minute

@@ -7,6 +7,8 @@ const PaymentAccount = () => {
     const [apiKey, setApiKey] = useState("");
     const [apiSecret, setApiSecret] = useState("");
     const [saving, setSaving] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState(null); // { ok: bool, message: string }
     const [loading, setLoading] = useState(true);
     const [msg, setMsg] = useState("");
 
@@ -18,6 +20,13 @@ const PaymentAccount = () => {
     useEffect(() => {
         fetchApiData();
     }, []);
+
+    // Wipe any prior test verdict when the user edits the credentials so the
+    // banner can't show a stale "valid" tick next to changed values.
+    useEffect(() => {
+        if (testResult !== null) setTestResult(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [apiKey, apiSecret]);
 
     const fetchApiData = async () => {
         try {
@@ -60,6 +69,41 @@ const PaymentAccount = () => {
             else showErrorToast(backendMsg || 'Error in saving API credentials');
         } finally {
             setSaving(false);
+        }
+    };
+
+    // Calls Admin → /paymentConfig/test, which calls Razorpay's read-only
+    // probe with these creds. Lets the admin verify validity *before* Save.
+    const testConnection = async () => {
+        setTesting(true);
+        setTestResult(null);
+        try {
+            const response = await api.post('/paymentConfig/test', {
+                "razorpayKey": apiKey,
+                "razorpaySecret": apiSecret,
+            });
+            const data = response?.data || {};
+            const ok = !!data.success;
+            const message = data.message || (ok ? "Razorpay accepted these credentials." : "Razorpay rejected these credentials.");
+            setTestResult({ ok, message });
+            if (ok) showSuccessToast(message);
+            else showErrorToast(message);
+        } catch (error) {
+            const status = error?.response?.status;
+            const data = error?.response?.data;
+            const backendMsg =
+              (data && typeof data === "object" && data.message) ? String(data.message)
+              : (typeof data === "string" ? data : null);
+
+            let message;
+            if (status === 403) message = backendMsg || "Access denied. Only Super Admin can test payment configuration.";
+            else if (status === 401) message = "Please sign in again to test payment configuration.";
+            else message = backendMsg || "Could not test Razorpay connection.";
+
+            setTestResult({ ok: false, message });
+            showErrorToast(message);
+        } finally {
+            setTesting(false);
         }
     };
 
@@ -132,8 +176,21 @@ const PaymentAccount = () => {
                                 </div>
                             </div>
 
+                            {/* Test result banner — gives the admin instant feedback
+                                that Razorpay accepts or rejects these creds, without
+                                anyone having to attempt a real checkout. */}
+                            {testResult && (
+                                <div className={`mt-6 p-3 rounded-md text-sm font-medium border ${
+                                    testResult.ok
+                                        ? 'bg-green-50 text-green-800 border-green-200'
+                                        : 'bg-red-50 text-red-800 border-red-200'
+                                }`}>
+                                    {testResult.ok ? '✓ ' : '✗ '}{testResult.message}
+                                </div>
+                            )}
+
                             {/* Action Buttons */}
-                            <div className="mt-8 flex flex-col sm:flex-row justify-between  border-t pt-6">
+                            <div className="mt-8 flex flex-col sm:flex-row justify-between gap-3 border-t pt-6">
                                 <div className='pt-[5px]'>
                                     <h1 className='bg-red-500 text-white text-[14px] font-medium p-[0px_5px] rounded-md ' >{msg}</h1>
                                 </div>
@@ -147,31 +204,60 @@ const PaymentAccount = () => {
                                     Clear
                                 </button> */}
 
-                                <button
-                                    onClick={saveToAPI}
-                                    disabled={!apiKey || !apiSecret || saving}
-                                    className={`
-                                         w-full sm:w-auto px-8 py-3 text-sm font-bold text-white rounded-lg
-                                              transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2
-                                                ${(!apiKey || !apiSecret)
-                                            ? 'bg-gray-300 cursor-not-allowed hover:scale-100'
-                                            : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl'
-                                        }
-                                              ${saving ? 'opacity-75 cursor-wait' : ''}
-                                               `}
-                                >
-                                    {saving ? (
-                                        <span className="flex items-center justify-center">
-                                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                            </svg>
-                                            Saving...
-                                        </span>
-                                    ) : (
-                                        'Save Configuration'
-                                    )}
-                                </button>
+                                <div className="flex flex-col sm:flex-row gap-3 sm:ml-auto">
+                                    <button
+                                        onClick={testConnection}
+                                        disabled={!apiKey || !apiSecret || testing || saving}
+                                        title="Verify these credentials against Razorpay without saving"
+                                        className={`
+                                             w-full sm:w-auto px-6 py-3 text-sm font-bold rounded-lg
+                                                  transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                                                    ${(!apiKey || !apiSecret || saving)
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                                : 'bg-white text-blue-600 border border-blue-500 hover:bg-blue-50 shadow-sm'
+                                            }
+                                                  ${testing ? 'opacity-75 cursor-wait' : ''}
+                                                   `}
+                                    >
+                                        {testing ? (
+                                            <span className="flex items-center justify-center">
+                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                </svg>
+                                                Testing...
+                                            </span>
+                                        ) : (
+                                            'Test Connection'
+                                        )}
+                                    </button>
+
+                                    <button
+                                        onClick={saveToAPI}
+                                        disabled={!apiKey || !apiSecret || saving || testing}
+                                        className={`
+                                             w-full sm:w-auto px-8 py-3 text-sm font-bold text-white rounded-lg
+                                                  transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2
+                                                    ${(!apiKey || !apiSecret || testing)
+                                                ? 'bg-gray-300 cursor-not-allowed hover:scale-100'
+                                                : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-lg hover:shadow-xl'
+                                            }
+                                                  ${saving ? 'opacity-75 cursor-wait' : ''}
+                                                   `}
+                                    >
+                                        {saving ? (
+                                            <span className="flex items-center justify-center">
+                                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                </svg>
+                                                Saving...
+                                            </span>
+                                        ) : (
+                                            'Save Configuration'
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

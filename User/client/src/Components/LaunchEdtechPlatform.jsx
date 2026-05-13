@@ -1027,8 +1027,8 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
               <tr>
                 <th className="py-2.5 pl-3 pr-2 font-semibold">Company</th>
                 <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Expiration</th>
-                <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Space assigned</th>
-                <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Space left</th>
+                <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Allocated</th>
+                <th className="py-2.5 px-2 font-semibold whitespace-nowrap">Free</th>
                 <th className="py-2.5 pr-6 pl-2 font-semibold whitespace-nowrap">Plan</th>
                 <th
                   className="py-2.5 px-1 text-center font-semibold whitespace-nowrap border-l border-gray-200 text-slate-500"

@@ -1,5 +1,6 @@
 package com.rankwell.admin.entity;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import jakarta.persistence.JoinColumn;
@@ -62,7 +63,35 @@ public class Invoice {
 
 	@Column(name = "seller_company_gst_no", length = 64)
 	private String sellerCompanyGSTNo;
-	
+
+	// Snapshot of buyer (Bill To) details at generation time. Written by the
+	// User backend at invoice creation time; Admin reads them via the same DB.
+	@Column(name = "buyer_name", length = 255)
+	private String buyerName;
+
+	@Column(name = "buyer_address", length = 2000)
+	private String buyerAddress;
+
+	@Column(name = "buyer_phone", length = 64)
+	private String buyerPhone;
+
+	@Column(name = "buyer_email", length = 255)
+	private String buyerEmail;
+
+	@Column(name = "buyer_gst_no", length = 64)
+	private String buyerGstNo;
+
+	// Inclusive last day of the purchased plan. Computed at invoice time from
+	// invoiceDate + (plan.durationDays - 1) for fresh subscriptions, or by
+	// extending the existing client's trialExpiresOn for upgrades/renewals.
+	@Column(name = "subscription_expires_on")
+	private LocalDate subscriptionExpiresOn;
+
+	// Cumulative allocated storage (MB) on the portal AFTER this purchase.
+	// Snapshotted by the User backend at invoice generation time.
+	@Column(name = "assigned_storage_mb")
+	private Integer assignedStorageMb;
+
 	@ManyToOne
 	@JoinColumn(name = "user_id")
 	private Users users;
@@ -240,6 +269,62 @@ public class Invoice {
 
 	public void setSellerCompanyGSTNo(String sellerCompanyGSTNo) {
 		this.sellerCompanyGSTNo = sellerCompanyGSTNo;
+	}
+
+	public String getBuyerName() {
+		return buyerName;
+	}
+
+	public void setBuyerName(String buyerName) {
+		this.buyerName = buyerName;
+	}
+
+	public String getBuyerAddress() {
+		return buyerAddress;
+	}
+
+	public void setBuyerAddress(String buyerAddress) {
+		this.buyerAddress = buyerAddress;
+	}
+
+	public String getBuyerPhone() {
+		return buyerPhone;
+	}
+
+	public void setBuyerPhone(String buyerPhone) {
+		this.buyerPhone = buyerPhone;
+	}
+
+	public String getBuyerEmail() {
+		return buyerEmail;
+	}
+
+	public void setBuyerEmail(String buyerEmail) {
+		this.buyerEmail = buyerEmail;
+	}
+
+	public String getBuyerGstNo() {
+		return buyerGstNo;
+	}
+
+	public void setBuyerGstNo(String buyerGstNo) {
+		this.buyerGstNo = buyerGstNo;
+	}
+
+	public LocalDate getSubscriptionExpiresOn() {
+		return subscriptionExpiresOn;
+	}
+
+	public void setSubscriptionExpiresOn(LocalDate subscriptionExpiresOn) {
+		this.subscriptionExpiresOn = subscriptionExpiresOn;
+	}
+
+	public Integer getAssignedStorageMb() {
+		return assignedStorageMb;
+	}
+
+	public void setAssignedStorageMb(Integer assignedStorageMb) {
+		this.assignedStorageMb = assignedStorageMb;
 	}
 
 //	public List<Courses> getCourses() {

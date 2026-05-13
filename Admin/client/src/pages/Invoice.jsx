@@ -19,6 +19,46 @@ const Invoice = ({ invoice, onClose, orgData, autoDownload = false }) => {
     return `${dNum} day${dNum === 1 ? "" : "s"}`;
   };
 
+  // True when this purchase extended an existing subscription (added on top of
+  // prior allocations) rather than being a first / lapsed-plan fresh start.
+  // Used to decide whether to show the "(+N days added)" / "(+M MB assigned)"
+  // hints under the Duration and Assigned Space columns.
+  const isExtension = (() => {
+    if (
+      invoice?.assignedStorageMb != null &&
+      invoice?.itemStorageLimitMb != null &&
+      invoice.assignedStorageMb !== invoice.itemStorageLimitMb
+    ) {
+      return true;
+    }
+    if (
+      invoice?.subscriptionExpiresOn &&
+      invoice?.invoiceDate &&
+      invoice?.itemDurationDays
+    ) {
+      const expiryIso = String(invoice.subscriptionExpiresOn).slice(0, 10);
+      const invDateIso = String(invoice.invoiceDate).slice(0, 10);
+      const [yy, mm, dd] = invDateIso.split("-").map(Number);
+      if (Number.isFinite(yy) && Number.isFinite(mm) && Number.isFinite(dd)) {
+        const fresh = new Date(Date.UTC(yy, mm - 1, dd));
+        fresh.setUTCDate(fresh.getUTCDate() + Number(invoice.itemDurationDays) - 1);
+        const pad = (n) => String(n).padStart(2, "0");
+        const freshIso = `${fresh.getUTCFullYear()}-${pad(fresh.getUTCMonth() + 1)}-${pad(fresh.getUTCDate())}`;
+        if (expiryIso !== freshIso) return true;
+      }
+    }
+    return false;
+  })();
+
+  // Backend sends LocalDate as "YYYY-MM-DD"; render DD/MM/YYYY to match the invoice date.
+  const formatLocalDate = (iso) => {
+    if (!iso || typeof iso !== "string") return "";
+    const parts = iso.slice(0, 10).split("-");
+    if (parts.length !== 3) return iso;
+    const [yy, mm, dd] = parts;
+    return `${dd}/${mm}/${yy}`;
+  };
+
   const unitPrice = Number(invoice?.itemUnitPrice ?? 0);
   const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : 0;
   const safeTaxRate = Number.isFinite(Number(taxRate)) ? Number(taxRate) : 0;
@@ -31,15 +71,21 @@ const Invoice = ({ invoice, onClose, orgData, autoDownload = false }) => {
     companyName: invoice?.sellerCompanyName || orgData?.orgName,
     companyAddress: invoice?.sellerCompanyAddress || orgData?.orgAddress,
 
-    billToName: invoice.payment.user.userName,
-    billToPhone: invoice.payment.user.mobileNo,
-    billToAddress: invoice.payment.user.streetAddress,
-    billToCity: invoice.payment.user.city,
-    billToPincode: invoice.payment.user.postalCode,
+    // Prefer the snapshot fields persisted on the invoice. Fall back to user
+    // fields for invoices created before the snapshot existed so old PDFs still
+    // render the buyer's mobile/name instead of going blank.
+    billToName: invoice?.buyerName || invoice?.payment?.user?.userName || "",
+    billToAddress: invoice?.buyerAddress || invoice?.payment?.user?.streetAddress || "",
+    billToPhone: invoice?.buyerPhone || invoice?.payment?.user?.mobileNo || "",
+    billToEmail: invoice?.buyerEmail || invoice?.payment?.user?.email || "",
+    billToGstNo: invoice?.buyerGstNo || "",
+    billToCity: invoice?.payment?.user?.city || "",
+    billToPincode: invoice?.payment?.user?.postalCode || "",
 
     invoiceGST: invoice?.sellerCompanyGSTNo || "",
     invoiceId: invoice.invoiceId?.replace(/\s+/g, ""),
     invoiceDate: formattedDate,
+    expiresOn: formatLocalDate(invoice?.subscriptionExpiresOn),
   });
 
   useEffect(() => {
@@ -169,38 +215,35 @@ const Invoice = ({ invoice, onClose, orgData, autoDownload = false }) => {
           {/* Invoice Body */}
           <div className="border rounded-lg p-6 bg-gray-50 text-black" id="invoice">
 
-            <p className="text-2xl font-black mb-4 text-center text-black">
+            <p className="text-2xl font-black mb-3 text-center text-black">
               Invoice
             </p>
 
-            <hr className='py-2' />
+            <hr className='my-3' />
 
-            {/* Company Header */}
-            <div className="flex relative gap-[4%] items-start mb-6">
+            {/* Company Header — compact 2-col layout. Logo (small) on the left,
+                seller name + address + GST stacked together on the right with no
+                wasted whitespace. */}
+            <div className="flex items-start gap-4 mb-4">
+              <img
+                src={`${baseUrl}/${(invoice?.sellerCompanyLogoPath || orgData?.orgLogo || "").replace(/^\/+/, "")}`}
+                alt="Company Logo"
+                className="w-20 h-20 object-contain shrink-0"
+              />
 
-              <div className='w-[40%] text-left'>
-                <img
-                  src={`${baseUrl}/${(invoice?.sellerCompanyLogoPath || orgData?.orgLogo || "").replace(/^\/+/, "")}`}
-                  alt="Company Logo"
-                  className="w-32 h-32 object-contain mb-2"
-                />
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-xl leading-tight">{invoiceData?.companyName}</h3>
+                <p className="text-sm text-black mt-1 whitespace-pre-line">{invoiceData?.companyAddress}</p>
+                {invoiceData?.invoiceGST && (
+                  <p className="text-sm text-black mt-1">
+                    <span className='font-bold mr-1'>GST No.:</span>
+                    {invoiceData.invoiceGST}
+                  </p>
+                )}
               </div>
-
-              <div className='w-[40%]'>
-                <h3 className="font-bold text-xl">{orgData?.orgName}</h3>
-                <p className="text-sm text-black">{orgData?.orgAddress}</p>
-              </div>
-
-              <div className='absolute right-1 bottom-0'>
-                <p className="text-sm text-black">
-                  <span className='font-bold mr-1'>GST No.:</span>
-                  {invoiceData?.invoiceGST}
-                </p>
-              </div>
-
             </div>
 
-            <hr className='my-4' />
+            <hr className='my-3' />
 
             {/* Bill To */}
             <div className="flex justify-between mb-6">
@@ -208,12 +251,23 @@ const Invoice = ({ invoice, onClose, orgData, autoDownload = false }) => {
               <div className='flex gap-2'>
                 <h4 className="font-semibold">Bill To:</h4>
                 <div>
-                  <p className="font-medium">{invoiceData.billToName}</p>
-                  <p className="text-sm">{invoiceData.billToPhone}</p>
-                  <p className="text-sm">{invoiceData.billToAddress}</p>
-                  <p className="text-sm">
-                    {invoiceData.billToCity} - {invoiceData.billToPincode}
-                  </p>
+                  {invoiceData.billToName && (
+                    <p className="font-medium">{invoiceData.billToName}</p>
+                  )}
+                  {invoiceData.billToAddress && (
+                    <p className="text-sm">{invoiceData.billToAddress}</p>
+                  )}
+                  {invoiceData.billToGstNo && (
+                    <p className="text-sm">
+                      <span className='font-bold'>GST No.:</span> {invoiceData.billToGstNo}
+                    </p>
+                  )}
+                  {invoiceData.billToPhone && (
+                    <p className="text-sm">{invoiceData.billToPhone}</p>
+                  )}
+                  {invoiceData.billToEmail && (
+                    <p className="text-sm">{invoiceData.billToEmail}</p>
+                  )}
                 </div>
               </div>
 
@@ -236,18 +290,39 @@ const Invoice = ({ invoice, onClose, orgData, autoDownload = false }) => {
                 <tr className="bg-gray-100">
                   <th className="py-3 px-4 text-sm font-semibold text-black border">Plan</th>
                   <th className="py-3 px-4 text-sm font-semibold text-black border">Duration</th>
+                  <th className="py-3 px-4 text-sm font-semibold text-black border">Assigned Space</th>
                   <th className="py-3 px-4 text-sm font-semibold text-black border">Unit price</th>
                 </tr>
               </thead>
 
               <tbody>
                 <tr className="bg-gray-50">
-                  <td className="py-2 px-4 text-sm border">{invoice?.itemName || "Subscription"}</td>
-                  <td className="py-2 px-4 text-sm border">
-                    {invoice?.itemDurationDays != null ? formatDurationDays(invoice.itemDurationDays) : "—"}
-                    {invoice?.itemStorageLimitMb != null ? ` · ${invoice.itemStorageLimitMb} MB` : ""}
+                  <td className="py-2 px-4 text-sm border align-top">{invoice?.itemName || "Subscription"}</td>
+                  <td className="py-2 px-4 text-sm border align-top">
+                    {invoiceData.expiresOn
+                      ? `Valid until ${invoiceData.expiresOn}`
+                      : (invoice?.itemDurationDays != null
+                        ? formatDurationDays(invoice.itemDurationDays)
+                        : "—")}
+                    {isExtension && invoice?.itemDurationDays != null && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        (+{invoice.itemDurationDays} days added)
+                      </div>
+                    )}
                   </td>
-                  <td className="py-2 px-4 text-sm border">₹{totals.total.toLocaleString()}</td>
+                  <td className="py-2 px-4 text-sm border align-top">
+                    {invoice?.assignedStorageMb != null
+                      ? `${invoice.assignedStorageMb} MB`
+                      : invoice?.itemStorageLimitMb != null
+                        ? `${invoice.itemStorageLimitMb} MB`
+                        : "—"}
+                    {isExtension && invoice?.itemStorageLimitMb != null && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        (+{invoice.itemStorageLimitMb} MB assigned)
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2 px-4 text-sm border align-top">₹{totals.total.toLocaleString()}</td>
                 </tr>
               </tbody>
             </table>

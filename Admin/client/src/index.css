@@ -13,6 +13,34 @@
     display: none;
 }
 
+/*
+ * Opt-in horizontal scrollbar for wide data tables / lists.
+ * The site globally hides webkit scrollbars above, so wrappers that NEED a
+ * visible bar (so users can tell they can scroll right) must override it.
+ * Apply by adding the `show-scrollbar` class to the wrapper that owns
+ * `overflow-x-auto`.
+ */
+.show-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+}
+.show-scrollbar::-webkit-scrollbar {
+    display: block;
+    height: 10px;
+    width: 10px;
+}
+.show-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 9999px;
+}
+.show-scrollbar::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 9999px;
+}
+.show-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
 /* Imported marketing home hero — text-only carousel transition */
 @keyframes home-hero-copy-enter {
   from {

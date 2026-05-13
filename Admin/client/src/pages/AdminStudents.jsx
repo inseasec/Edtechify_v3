@@ -646,11 +646,14 @@ export default function AdminStudents() {
         </div>
       </div>
 
-      <div className="mt-3 min-w-0 rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="mt-3 min-w-0 rounded-lg border border-gray-200 bg-white overflow-x-auto show-scrollbar">
         {loading ? (
           <div className="p-4 text-center text-gray-600">Loading…</div>
         ) : (
-          <table className="w-full min-w-[1100px] table-fixed border-collapse">
+          // min-w is the trigger for the horizontal scrollbar on the parent
+          // wrapper above. Keep it generous enough so smaller laptops / docked
+          // sidebars get a comfortable scroll instead of squishing every cell.
+          <table className="w-full min-w-[1400px] table-fixed border-collapse">
             <colgroup>
               <col style={{ width: '12%' }} />
               <col style={{ width: '10%' }} />

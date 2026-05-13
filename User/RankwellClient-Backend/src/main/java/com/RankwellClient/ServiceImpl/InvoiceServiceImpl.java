@@ -1,11 +1,16 @@
 package com.RankwellClient.ServiceImpl;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.time.Year;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.RankwellClient.entity.BillingDetails;
+import com.RankwellClient.entity.EdukifyClient;
 import com.RankwellClient.entity.InvoiceSettings;
+import com.RankwellClient.repository.BillingDetailsRepository;
+import com.RankwellClient.repository.EdukifyClientRepository;
 import com.RankwellClient.repository.InvoiceSettingsRepository;
 import com.RankwellClient.entity.Invoice;
 import com.RankwellClient.entity.Payment;
@@ -30,6 +35,12 @@ public class InvoiceServiceImpl implements InvoiceService{
 
 	 @Autowired
 	 private SubscriptionPlanRepository subscriptionPlanRepository;
+
+	 @Autowired
+	 private BillingDetailsRepository billingDetailsRepository;
+
+	 @Autowired
+	 private EdukifyClientRepository edukifyClientRepository;
 
 	    public Invoice generateInvoice(Payment payment) { 
 	        Invoice invoice = new Invoice();
@@ -135,6 +146,44 @@ public class InvoiceServiceImpl implements InvoiceService{
 			invoice.setSellerCompanyLogoPath(sellerLogoObj != null ? String.valueOf(sellerLogoObj) : null);
 			invoice.setSellerCompanyGSTNo(sellerGstObj != null ? String.valueOf(sellerGstObj) : null);
 
+			// === Snapshot buyer (Bill To) ===
+			// Three-tier preference, picked at generation time so future edits to
+			// the user's profile do not retroactively change old invoices:
+			//   1. Explicit BillingDetails with sameAsCompany=false  → use as-is.
+			//   2. Otherwise the user's company profile (clients table).
+			//   3. GST is always taken from BillingDetails if present (it lives
+			//      there even when "same as company" is selected).
+			//   4. Final fallback: Users entity fields (legacy behavior).
+			Long userIdForBilling = payment.getUser() != null ? payment.getUser().getId() : null;
+			BillingDetails billing = userIdForBilling != null
+					? billingDetailsRepository.findByUserId(userIdForBilling).orElse(null)
+					: null;
+			EdukifyClient client = userIdForBilling != null
+					? edukifyClientRepository.findByUserId(userIdForBilling).orElse(null)
+					: null;
+
+			if (billing != null && !billing.isSameAsCompany()) {
+				invoice.setBuyerName(blankToNull(billing.getBillingName()));
+				invoice.setBuyerAddress(blankToNull(billing.getBillingAddress()));
+				invoice.setBuyerPhone(blankToNull(billing.getBillingPhone()));
+				invoice.setBuyerEmail(blankToNull(billing.getBillingEmail()));
+				invoice.setBuyerGstNo(blankToNull(billing.getBillingGstNo()));
+			} else if (client != null) {
+				invoice.setBuyerName(blankToNull(client.getCompanyName()));
+				invoice.setBuyerAddress(blankToNull(client.getAddress()));
+				invoice.setBuyerPhone(blankToNull(client.getPhone()));
+				invoice.setBuyerEmail(blankToNull(client.getEmail()));
+				// GST is kept in BillingDetails even with sameAsCompany=true.
+				if (billing != null) {
+					invoice.setBuyerGstNo(blankToNull(billing.getBillingGstNo()));
+				}
+			} else if (payment.getUser() != null) {
+				invoice.setBuyerName(blankToNull(payment.getUser().getUserName()));
+				invoice.setBuyerPhone(blankToNull(payment.getUser().getMobileNo()));
+				invoice.setBuyerEmail(blankToNull(payment.getUser().getEmail()));
+				invoice.setBuyerAddress(blankToNull(payment.getUser().getStreetAddress()));
+			}
+
 			// Long invoiceTaxRate = invoiceValues.get("invoice_tax_rate"); // 18% -> 0.18 
 	        // Long taxAmount = Math.round(totalAmount * invoiceTaxRate / (1 + invoiceTaxRate));	
 
@@ -159,6 +208,54 @@ public class InvoiceServiceImpl implements InvoiceService{
 					// Store in rupees as integer for invoice display
 					if (plan.getPrice() != null) {
 						invoice.setItemUnitPrice(Math.round(plan.getPrice().doubleValue()));
+					}
+
+					// Compute the post-purchase expiry + storage so the invoice
+					// shows what the user actually got. Must mirror exactly what
+					// PaymentServiceImpl applies to the client a moment later
+					// (invoice generation runs before the client update). Rule:
+					//   • Active paid subscription → extend expiry / add storage.
+					//   • Trial OR lapsed paid → REPLACE with the new plan's values
+					//     (no trial credits carried into the paid period).
+					Long buyerUserId = payment.getUser() != null ? payment.getUser().getId() : null;
+					EdukifyClient buyerClient = buyerUserId != null
+							? edukifyClientRepository.findByUserId(buyerUserId).orElse(null)
+							: null;
+
+					int days = plan.getDurationDays() != null && plan.getDurationDays() > 0
+							? plan.getDurationDays() : 0;
+					int planMb = plan.getStorageLimitMb() != null && plan.getStorageLimitMb() > 0
+							? plan.getStorageLimitMb() : 0;
+
+					LocalDate today = invoice.getInvoiceDate() != null
+							? invoice.getInvoiceDate().toLocalDate()
+							: LocalDate.now();
+
+					boolean hasActivePaidSubscription = buyerClient != null
+							&& buyerClient.getSubscription() != null
+							&& !"Trial".equalsIgnoreCase(buyerClient.getSubscription())
+							&& buyerClient.getTrialExpiresOn() != null
+							&& !buyerClient.getTrialExpiresOn().isBefore(today);
+
+					if (hasActivePaidSubscription) {
+						if (days > 0) {
+							invoice.setSubscriptionExpiresOn(buyerClient.getTrialExpiresOn().plusDays(days));
+						}
+						if (planMb > 0) {
+							Integer existingMb = buyerClient.getTrialLimitStorageMb();
+							int cumulativeMb = (existingMb != null ? existingMb : 0) + planMb;
+							invoice.setAssignedStorageMb(cumulativeMb);
+						} else if (buyerClient.getTrialLimitStorageMb() != null) {
+							invoice.setAssignedStorageMb(buyerClient.getTrialLimitStorageMb());
+						}
+					} else {
+						// First paid purchase OR lapsed plan — fresh allocation.
+						if (days > 0) {
+							invoice.setSubscriptionExpiresOn(today.plusDays(days - 1L));
+						}
+						if (planMb > 0) {
+							invoice.setAssignedStorageMb(planMb);
+						}
 					}
 				}
 			}
@@ -312,5 +409,11 @@ public class InvoiceServiceImpl implements InvoiceService{
 		List<Invoice> invoice = invoiceRepository.findByUsersIdOrderByInvoiceDateDescIdDesc(userId);
 		return invoice;
 	 }
+
+	private static String blankToNull(String value) {
+		if (value == null) return null;
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
 
 }
