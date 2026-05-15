@@ -228,6 +228,7 @@ function mapDetailsToForm(raw) {
  */
 export default function Frontend() {
   const location = useLocation()
+  const isAuthSection = location.pathname.includes('/authentication')
   const [formData, setFormData] = useState(defaultForm)
   const [isLoading, setIsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -258,8 +259,12 @@ export default function Frontend() {
   }, [])
 
   useEffect(() => {
+    if (isAuthSection) {
+      setIsLoading(false)
+      return
+    }
     fetchAllData()
-  }, [fetchAllData])
+  }, [fetchAllData, isAuthSection])
 
   const handleTextChange = useCallback((e) => {
     const { name, value } = e.target
@@ -380,6 +385,8 @@ export default function Frontend() {
 
   return (
     <div className="-mx-6 -mb-6 min-h-0 bg-white text-gray-900">
+      {!isAuthSection ? (
+        <>
       <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
           <p className="text-sm font-medium text-slate-600">{pageLabel}</p>
@@ -426,6 +433,8 @@ export default function Frontend() {
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading organization…
         </div>
+      ) : null}
+        </>
       ) : null}
       <Outlet context={outletContext} />
     </div>
