@@ -10,6 +10,7 @@ import { describeCountryCodeError } from "../utils/phoneCountryValidation";
 import { formatMobileForApi, parsePhonePrefill } from "../utils/phoneValidation";
 import { deriveLaunchContactLocks, resolveLaunchOtpRequirements } from "../utils/signupChannel";
 import { ensureContactAvailable } from "../utils/contactAvailability";
+import { buildPlanPickerNavState, planPickerLinkLabel } from "../utils/subscriptionPlanPicker";
 
 const BASE_DOMAIN = "edukify.com";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1009,6 +1010,8 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
 
     const spaceLeft = formatSpaceLeftMb(allocatedMb, portal.storageUsedBytes)
     const { on: liveOn, text: liveText } = portalLiveDisplay(portal)
+    const planPickerNavState = buildPlanPickerNavState(portal)
+    const planPickerLabel = planPickerLinkLabel(portal.planStatus, portal.subscription)
 
     return (
       <div className="mx-auto w-full max-w-none overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl shadow-sky-900/10">
@@ -1058,10 +1061,11 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
                     </span>
                     <Link
                       to="/account/upgrade-plans"
+                      state={planPickerNavState}
                       className="inline-flex items-center gap-0.5 text-xs font-semibold text-sky-600 underline-offset-2 hover:text-sky-800 hover:underline"
                     >
                       <i className="ri-shopping-bag-3-line text-sm" aria-hidden />
-                      Upgrade Plan
+                      {planPickerLabel}
                     </Link>
                   </div>
                 </td>

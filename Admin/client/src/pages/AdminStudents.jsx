@@ -736,7 +736,9 @@ export default function AdminStudents() {
                   isTrial && anchorIso ? trialInclusiveEndIso(anchorIso, effD) : null
                 const limitDraft = limitDraftByUserId[uidKey]
                 const expiryIso = isTrial
-                  ? limitDraft?.expiryIso ?? baseEndIso
+                  ? limitDraft?.expiryIso ??
+                    row.trialExpiresOn ??
+                    baseEndIso
                   : row.trialExpiresOn ?? (anchorIso ? trialInclusiveEndIso(anchorIso, effD) : null)
                 const mbStr = limitDraft?.mb ?? String(effM)
                 const pm = parseInt(String(mbStr).trim(), 10)

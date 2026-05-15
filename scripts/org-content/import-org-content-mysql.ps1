@@ -1,7 +1,7 @@
 # Import org-content-mysql.sql into TARGET database (run export first).
 
 param(
-    [string]$TargetDb = "edukify_db",
+    [string]$TargetDb = "fundamental_db_temp",
     [string]$MySqlHost = "localhost",
     [string]$User = "root",
     [string]$Password = "root",
@@ -83,23 +83,31 @@ Write-Host "Tip: start admin backend once on $TargetDb so Hibernate creates tabl
 
 if (-not $SkipClear) {
     Write-Host "Clearing existing organization rows..."
-    $truncateLines = @($tables | ForEach-Object { "TRUNCATE TABLE ``$_``;" })
-    $truncateSql = (
-        @("SET FOREIGN_KEY_CHECKS=0;", "SET UNIQUE_CHECKS=0;") +
-        $truncateLines +
-        @("SET FOREIGN_KEY_CHECKS=1;")
+    $truncateLines = foreach ($t in $tables) { "TRUNCATE TABLE ``$t``;" }
+    $truncateSql = @(
+        "SET FOREIGN_KEY_CHECKS=0;",
+        "SET UNIQUE_CHECKS=0;",
+        $truncateLines,
+        "SET FOREIGN_KEY_CHECKS=1;"
     ) -join "`n"
 
-    $clearExit = Invoke-MySqlText -SqlText $truncateSql -ExtraArgs @("--force")
+    $clearExit = Invoke-MySqlText -SqlText $truncateSql
     if ($clearExit -ne 0) {
-        Write-Warning "Clear step exited with $clearExit (missing tables? Start backend once on $TargetDb, then re-run)."
+        Write-Warning "Clear step exited with $clearExit (tables may not exist yet - start backend once, then re-run)."
     }
 }
 
 Write-Host "Importing data..."
 
 $dump = Get-Content -LiteralPath $InFile -Raw -Encoding UTF8
-$importSql = "SET NAMES utf8mb4;`nSET FOREIGN_KEY_CHECKS=0;`nSET UNIQUE_CHECKS=0;`n$dump`nSET FOREIGN_KEY_CHECKS=1;`nSET UNIQUE_CHECKS=1;`n"
+$importSql = @(
+    "SET NAMES utf8mb4;",
+    "SET FOREIGN_KEY_CHECKS=0;",
+    "SET UNIQUE_CHECKS=0;",
+    $dump,
+    "SET FOREIGN_KEY_CHECKS=1;",
+    "SET UNIQUE_CHECKS=1;"
+) -join "`n"
 
 $importExit = Invoke-MySqlText -SqlText $importSql
 if ($importExit -ne 0) {

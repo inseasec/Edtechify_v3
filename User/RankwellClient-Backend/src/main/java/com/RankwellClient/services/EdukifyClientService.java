@@ -19,8 +19,10 @@ import com.RankwellClient.dto.LaunchPortalRequest;
 import com.RankwellClient.dto.PortalLaunchResponse;
 import com.RankwellClient.dto.UpdatePortalRequest;
 import com.RankwellClient.entity.EdukifyClient;
+import com.RankwellClient.entity.PlatformTrialDefaults;
 import com.RankwellClient.entity.Users;
 import com.RankwellClient.repository.EdukifyClientRepository;
+import com.RankwellClient.repository.PlatformTrialDefaultsRepository;
 import com.RankwellClient.repository.UserRepository;
 
 @Service
@@ -35,6 +37,7 @@ public class EdukifyClientService {
 	private final EdukifyClientRepository eduClientRepository;
 	private final UserRepository userRepository;
 	private final LaunchGateService launchGateService;
+	private final PlatformTrialDefaultsRepository trialDefaultsRepository;
 
 	@Value("${EDUKIFY_PORTAL_BASE_DOMAIN:edukify.com}")
 	private String portalBaseDomain;
@@ -42,10 +45,12 @@ public class EdukifyClientService {
 	public EdukifyClientService(
 			EdukifyClientRepository eduClientRepository,
 			UserRepository userRepository,
-			LaunchGateService launchGateService) {
+			LaunchGateService launchGateService,
+			PlatformTrialDefaultsRepository trialDefaultsRepository) {
 		this.eduClientRepository = eduClientRepository;
 		this.userRepository = userRepository;
 		this.launchGateService = launchGateService;
+		this.trialDefaultsRepository = trialDefaultsRepository;
 	}
 
 	public static String slugifyCompanyName(String companyName) {
@@ -286,9 +291,7 @@ public class EdukifyClientService {
 		c.setSubdomain(subdomain);
 		c.setSubscription("Trial");
 		c.setPortalLaunchedAt(Instant.now());
-		int defaultTrialDays = 14;
-		LocalDate anchor = c.getPortalLaunchedAt().atZone(TRIAL_ZONE).toLocalDate();
-		c.setTrialExpiresOn(anchor.plusDays(defaultTrialDays - 1L));
+		applyPlatformTrialDefaults(c, u, loadPlatformDefaults());
 
 		EdukifyClient saved = eduClientRepository.save(c);
 		return toResponse(saved);
@@ -319,6 +322,33 @@ public class EdukifyClientService {
 
 		EdukifyClient saved = eduClientRepository.save(c);
 		return toResponse(saved);
+	}
+
+	private PlatformTrialDefaults loadPlatformDefaults() {
+		return trialDefaultsRepository.findById(1L).orElseGet(() -> {
+			PlatformTrialDefaults d = new PlatformTrialDefaults();
+			d.setId(1L);
+			d.setTrialDurationDays(14);
+			d.setTrialStorageMb(512);
+			return d;
+		});
+	}
+
+	/** Persist platform trial caps and inclusive last day — same rules as admin {@code refreshTrialExpiresOn}. */
+	private static void applyPlatformTrialDefaults(EdukifyClient client, Users owner, PlatformTrialDefaults def) {
+		int days = Math.max(1, def.getTrialDurationDays());
+		int mb = Math.max(1, def.getTrialStorageMb());
+		client.setTrialLimitDays(days);
+		client.setTrialLimitStorageMb(mb);
+		Instant anchorInstant = client.getPortalLaunchedAt();
+		if (anchorInstant == null) {
+			anchorInstant = owner.getCreatedAt();
+		}
+		if (anchorInstant == null) {
+			return;
+		}
+		LocalDate anchor = anchorInstant.atZone(TRIAL_ZONE).toLocalDate();
+		client.setTrialExpiresOn(anchor.plusDays(days - 1L));
 	}
 
 	public static Long userIdFromAuth(Authentication auth) {

@@ -568,6 +568,10 @@ function Signup() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isNormalMode && normalStep === 1) {
+      handleNormalContinue();
+      return;
+    }
     setError({});
     if (!validate()) return;
     const payload = buildAuthPayload({ ...userInfo, signupMode });
@@ -663,6 +667,9 @@ function Signup() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setUserInfo((prev) => ({ ...prev, [name]: value }));
+    if (name === "password") {
+      setError((p) => ({ ...p, password: undefined }));
+    }
   };
 
   const validateIdentifierOnly = () => {
@@ -682,12 +689,17 @@ function Signup() {
     return Object.keys(tempError).length === 0;
   };
 
+  const passwordStepVisible =
+    (!otpRequired || otpVerified) && (!isNormalMode || normalStep === 2);
+
   const handleNormalContinue = () => {
     setError((p) => ({
       ...p,
       identifier: undefined,
       phoneCountryCode: undefined,
       phoneNational: undefined,
+      password: undefined,
+      checkbox: undefined,
     }));
     if (!validateIdentifierOnly()) return;
     setNormalStep(2);
@@ -710,9 +722,10 @@ function Signup() {
 
     if (otpRequired && !otpVerified) tempError.otpVerify = "Please verify OTP before creating the account.";
 
-    if (password.length < 6) tempError.password = "Password must be at least 6 characters.";
-
-    if (!isChecked) tempError.checkbox = "You must accept the terms.";
+    if (passwordStepVisible) {
+      if (password.length < 6) tempError.password = "Password must be at least 6 characters.";
+      if (!isChecked) tempError.checkbox = "You must accept the terms.";
+    }
 
     setError(tempError);
     return Object.keys(tempError).length === 0;

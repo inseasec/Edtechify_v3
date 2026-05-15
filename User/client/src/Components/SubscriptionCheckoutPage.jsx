@@ -3,6 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api";
 import { decodeToken } from "../authConfig";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
+import {
+  buildPlanPickerNavState,
+  pickerCopy,
+  resolvePickerMode,
+} from "../utils/subscriptionPlanPicker";
 
 function formatPlanDurationDays(days) {
   const d = Number(days);
@@ -60,6 +65,27 @@ export default function SubscriptionCheckoutPage() {
   }, [location.state]);
 
   const [portalInfo, setPortalInfo] = useState(null);
+
+  const pickerMode = useMemo(() => {
+    const st = location.state;
+    if (st?.mode === "renew" || st?.mode === "upgrade") return st.mode;
+    return resolvePickerMode({
+      planStatus: portalInfo?.planStatus ?? st?.planStatus,
+      subscription: portalInfo?.subscription ?? st?.currentPlanName,
+    });
+  }, [location.state, portalInfo]);
+
+  const planPickerNavState = useMemo(() => {
+    if (portalInfo) return buildPlanPickerNavState(portalInfo);
+    const st = location.state;
+    return {
+      mode: pickerMode,
+      planStatus: st?.planStatus ?? "",
+      currentPlanName: st?.currentPlanName ?? "",
+    };
+  }, [portalInfo, pickerMode, location.state]);
+
+  const pickerLabels = useMemo(() => pickerCopy(pickerMode), [pickerMode]);
   const [accountContact, setAccountContact] = useState({ email: "", mobileNo: "" });
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customSaved, setCustomSaved] = useState(false);
@@ -328,14 +354,15 @@ export default function SubscriptionCheckoutPage() {
       <div className="w-full rounded-2xl border border-slate-200 bg-white/80 p-6 text-slate-700">
         <p className="text-base font-semibold">Choose a plan first</p>
         <p className="mt-1 text-sm text-slate-600">
-          Please go back to <span className="font-semibold">Upgrade your plan</span> and select a plan to continue.
+          Please go back to <span className="font-semibold">{pickerLabels.title}</span> and select a plan to
+          continue.
         </p>
         <button
           type="button"
-          onClick={() => navigate("/account/upgrade-plans")}
+          onClick={() => navigate("/account/upgrade-plans", { state: planPickerNavState })}
           className="mt-4 rounded-xl bg-sky-600 px-4 py-2 text-sm font-bold text-white hover:bg-sky-700"
         >
-          Back to plans
+          {pickerMode === "renew" ? "Back to renew plans" : "Back to upgrade plans"}
         </button>
       </div>
     );
@@ -577,7 +604,11 @@ export default function SubscriptionCheckoutPage() {
 
               <button
                 type="button"
-                onClick={() => navigate("/account/upgrade-plans", { state: { currentPlanId: subscriptionPlan.id } })}
+                onClick={() =>
+                  navigate("/account/upgrade-plans", {
+                    state: { ...planPickerNavState, currentPlanId: subscriptionPlan.id },
+                  })
+                }
                 className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-sky-700 shadow-sm hover:bg-slate-50"
               >
                 Change plan

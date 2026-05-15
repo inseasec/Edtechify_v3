@@ -16,8 +16,8 @@ import com.rankwell.admin.repository.PlatformTrialDefaultsRepository;
 import com.rankwell.admin.repository.UserRepository;
 
 /**
- * Backfills {@code clients.trial_expires_on} for legacy trial rows when missing, using portal launch
- * (or {@code Users.created_at}) and configured trial length. {@code clients.portal_live_status} is
+ * Backfills trial limit columns and {@code clients.trial_expires_on} for Trial clients when missing or
+ * out of sync (e.g. launch used a hardcoded 14-day expiry). {@code clients.portal_live_status} is
  * <strong>not</strong> derived from trial or expiry; admins set it explicitly.
  */
 @Service
@@ -55,17 +55,17 @@ public class PortalTrialAccessSyncService {
 
 		List<EdukifyClient> clients = clientRepository.findAll();
 		for (EdukifyClient c : clients) {
-			backfillTrialExpiresOnIfAbsent(c, def);
+			reconcileTrialClient(c, def);
 		}
 	}
 
-	/** One-time style backfill: rows created before {@code trial_expires_on} existed. */
-	private void backfillTrialExpiresOnIfAbsent(EdukifyClient c, PlatformTrialDefaults def) {
+	private static boolean isTrialSubscription(EdukifyClient c) {
 		String plan = c.getSubscription();
-		if (!(plan != null && "trial".equalsIgnoreCase(plan.trim()))) {
-			return;
-		}
-		if (c.getTrialExpiresOn() != null) {
+		return plan == null || plan.isBlank() || "trial".equalsIgnoreCase(plan.trim());
+	}
+
+	private void reconcileTrialClient(EdukifyClient c, PlatformTrialDefaults def) {
+		if (!isTrialSubscription(c)) {
 			return;
 		}
 		var ownerOpt = userRepository.findById(c.getUserId());
@@ -73,15 +73,45 @@ public class PortalTrialAccessSyncService {
 			return;
 		}
 		Users owner = ownerOpt.get();
-		int configured = c.getTrialLimitDays() != null ? c.getTrialLimitDays() : def.getTrialDurationDays();
-		int trialDays = Math.max(1, configured);
-		Instant launch = c.getPortalLaunchedAt();
-		Instant anchorInstant = launch != null ? launch : owner.getCreatedAt();
-		if (anchorInstant == null) {
+		boolean changed = false;
+
+		if (c.getTrialLimitDays() == null) {
+			c.setTrialLimitDays(Math.max(1, def.getTrialDurationDays()));
+			changed = true;
+		}
+		if (c.getTrialLimitStorageMb() == null) {
+			c.setTrialLimitStorageMb(Math.max(1, def.getTrialStorageMb()));
+			changed = true;
+		}
+
+		LocalDate expected = computeTrialExpiresOn(c, owner);
+		if (expected == null) {
+			if (changed) {
+				clientRepository.save(c);
+			}
 			return;
 		}
+
+		if (c.getTrialExpiresOn() == null || changed || !expected.equals(c.getTrialExpiresOn())) {
+			c.setTrialExpiresOn(expected);
+			changed = true;
+		}
+
+		if (changed) {
+			clientRepository.save(c);
+		}
+	}
+
+	private LocalDate computeTrialExpiresOn(EdukifyClient c, Users owner) {
+		int trialDays = Math.max(1, c.getTrialLimitDays() != null ? c.getTrialLimitDays() : 14);
+		Instant anchorInstant = c.getPortalLaunchedAt();
+		if (anchorInstant == null) {
+			anchorInstant = owner.getCreatedAt();
+		}
+		if (anchorInstant == null) {
+			return null;
+		}
 		LocalDate anchor = anchorInstant.atZone(ZONE).toLocalDate();
-		c.setTrialExpiresOn(anchor.plusDays(trialDays - 1L));
-		clientRepository.save(c);
+		return anchor.plusDays(trialDays - 1L);
 	}
 }

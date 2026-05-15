@@ -1,7 +1,12 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api";
 import { showErrorToast } from "../utils/toastUtils";
+import {
+  filterPlansForPicker,
+  pickerCopy,
+  resolvePickerMode,
+} from "../utils/subscriptionPlanPicker";
 
 function axiosErrorMessage(error, fallback = "Something went wrong") {
   const d = error?.response?.data;
@@ -28,33 +33,97 @@ function formatDurationDays(days) {
 export default function SubscriptionPlanPicker() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [plans, setPlans] = useState([]);
+  const [allPlans, setAllPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
+  const [portalContext, setPortalContext] = useState({
+    planStatus: location?.state?.planStatus ?? "",
+    subscription: location?.state?.currentPlanName ?? "",
+    mode: location?.state?.mode ?? null,
+  });
+
+  const mode = useMemo(
+    () =>
+      resolvePickerMode({
+        planStatus: portalContext.planStatus,
+        subscription: portalContext.subscription,
+        mode: portalContext.mode,
+      }),
+    [portalContext],
+  );
+
+  const plans = useMemo(
+    () => filterPlansForPicker(allPlans, mode, portalContext.subscription),
+    [allPlans, mode, portalContext.subscription],
+  );
+
+  const copy = useMemo(() => pickerCopy(mode), [mode]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      let planStatus = location?.state?.planStatus ?? "";
+      let subscription = location?.state?.currentPlanName ?? "";
+      let modeFromState = location?.state?.mode ?? null;
+
+      if (!location?.state?.mode) {
+        try {
+          const portalRes = await api.get("/clients/me");
+          const portal = portalRes?.data ?? portalRes;
+          planStatus = portal?.planStatus ?? planStatus;
+          subscription = portal?.subscription ?? subscription;
+        } catch {
+          /* no portal yet */
+        }
+      }
+
+      setPortalContext({
+        planStatus,
+        subscription,
+        mode: modeFromState,
+      });
+
       const { data } = await api.get("/subscription-plans/active");
       const list = Array.isArray(data) ? data : [];
-      setPlans(list);
-      if (list.length > 0) {
+      setAllPlans(list);
+
+      const resolvedMode = resolvePickerMode({
+        planStatus,
+        subscription,
+        mode: modeFromState,
+      });
+      const visible = filterPlansForPicker(list, resolvedMode, subscription);
+
+      if (visible.length > 0) {
         const preferredIdRaw = location?.state?.currentPlanId;
         const preferredId = preferredIdRaw != null ? Number(preferredIdRaw) : null;
-        const exists = preferredId != null && list.some((p) => Number(p.id) === preferredId);
-        setSelectedId(exists ? preferredId : list[0].id);
+        const exists = preferredId != null && visible.some((p) => Number(p.id) === preferredId);
+        setSelectedId(exists ? preferredId : visible[0].id);
+      } else {
+        setSelectedId(null);
       }
     } catch (e) {
       showErrorToast(axiosErrorMessage(e, "Could not load subscription plans."));
-      setPlans([]);
+      setAllPlans([]);
+      setSelectedId(null);
     } finally {
       setLoading(false);
     }
-  }, [location?.state?.currentPlanId]);
+  }, [location?.state?.currentPlanId, location?.state?.currentPlanName, location?.state?.mode, location?.state?.planStatus]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (plans.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    if (!plans.some((p) => Number(p.id) === Number(selectedId))) {
+      setSelectedId(plans[0].id);
+    }
+  }, [plans, selectedId]);
 
   const selected = plans.find((p) => p.id === selectedId) ?? null;
 
@@ -63,17 +132,21 @@ export default function SubscriptionPlanPicker() {
       showErrorToast("Choose a plan to continue.");
       return;
     }
-    navigate("/account/subscription-checkout", { state: { plan: selected } });
+    navigate("/account/subscription-checkout", {
+      state: {
+        plan: selected,
+        mode,
+        planStatus: portalContext.planStatus,
+        currentPlanName: portalContext.subscription,
+      },
+    });
   };
 
   return (
     <div className="w-full">
       <div className="mb-6 md:mb-8">
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Upgrade your plan</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
-          Compare subscription options below. Each plan shows price, billing period length, and included storage for
-          your edtech portal.
-        </p>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{copy.title}</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">{copy.description}</p>
       </div>
 
       {loading ? (
@@ -82,9 +155,10 @@ export default function SubscriptionPlanPicker() {
         </div>
       ) : plans.length === 0 ? (
         <div className="rounded-2xl border border-amber-100 bg-amber-50/80 px-6 py-10 text-center text-amber-900 shadow-sm">
-          <p className="font-semibold">No subscription plans available yet.</p>
+          <p className="font-semibold">{copy.emptyTitle}</p>
           <p className="mt-2 text-sm text-amber-800/90">
-            Please contact support, or ask your administrator to add plans under Settings → Subscription Plans.
+            {copy.emptyHint ||
+              "Please contact support, or ask your administrator to add plans under Settings → Subscription Plans."}
           </p>
         </div>
       ) : (
@@ -146,7 +220,7 @@ export default function SubscriptionPlanPicker() {
             onClick={goCheckout}
             className="rounded-xl bg-gradient-to-r from-sky-600 to-cyan-600 px-6 py-3 text-sm font-bold text-white shadow-md shadow-sky-500/25 transition hover:from-sky-700 hover:to-cyan-700"
           >
-            Continue to payment
+            {copy.continueLabel}
           </button>
         </div>
       ) : null}
