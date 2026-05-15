@@ -102,7 +102,7 @@ const IconGithub = () => (
 )
 
 export default function AuthenticationKeys() {
-  const [mode, setMode] = useState('BOTH')
+  const [mode, setMode] = useState('NORMAL')
   const [providers, setProviders] = useState({
     googleEnabled: true,
     facebookEnabled: true,

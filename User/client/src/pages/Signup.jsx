@@ -63,7 +63,7 @@ function loadFacebookScript() {
 
 function Signup() {
   const navigate = useNavigate();
-  const [signupMode, setSignupMode] = useState("BOTH"); // NORMAL | EMAIL | MOBILE | BOTH
+  const [signupMode, setSignupMode] = useState("NORMAL"); // NORMAL | EMAIL | MOBILE | BOTH
   const [normalStep, setNormalStep] = useState(1); // NORMAL mode only: 1=email, 2=password
   const [otpNotice, setOtpNotice] = useState("");
   const [socialProviders, setSocialProviders] = useState({

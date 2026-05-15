@@ -247,7 +247,7 @@ export default function AccountPanel() {
   const [isProfileImgBroken, setIsProfileImgBroken] = useState(false);
   const [portalInfo, setPortalInfo] = useState(null);
   const [billingInfo, setBillingInfo] = useState(null);
-  const [signupMode, setSignupMode] = useState("BOTH");
+  const [signupMode, setSignupMode] = useState("NORMAL");
   const [companyBaseline, setCompanyBaseline] = useState({
     email: "",
     phoneCountryCode: "+91",
@@ -294,10 +294,10 @@ export default function AccountPanel() {
       try {
         const res = await api.get("/users/signup-mode");
         if (!cancelled) {
-          setSignupMode(String(res.data?.mode || "BOTH").toUpperCase());
+          setSignupMode(String(res.data?.mode || "NORMAL").toUpperCase());
         }
       } catch {
-        if (!cancelled) setSignupMode("BOTH");
+        if (!cancelled) setSignupMode("NORMAL");
       }
     })();
     return () => {

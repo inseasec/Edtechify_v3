@@ -19,7 +19,7 @@ public class SignupAuthSetting {
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)
-	private Mode mode = Mode.BOTH;
+	private Mode mode = Mode.NORMAL;
 
 	@Column(name = "google_enabled")
 	private boolean googleEnabled = true;

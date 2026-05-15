@@ -90,7 +90,7 @@ export function deriveLaunchContactLocks(userId, user, parsedPhone) {
 }
 
 export function resolveLaunchOtpRequirements(signupMode, contactLocks = {}) {
-  const mode = signupMode || "BOTH";
+  const mode = signupMode || "NORMAL";
   const emailLocked = Boolean(contactLocks.emailLocked);
   const mobileLocked = Boolean(contactLocks.mobileLocked);
 
@@ -109,7 +109,7 @@ export function resolveLaunchOtpRequirements(signupMode, contactLocks = {}) {
 }
 
 export function resolveContactOtpCapabilities(signupMode) {
-  const mode = String(signupMode || "BOTH").toUpperCase();
+  const mode = String(signupMode || "NORMAL").toUpperCase();
   return {
     emailOtpEnabled: mode === "EMAIL" || mode === "BOTH",
     mobileOtpEnabled: mode === "MOBILE" || mode === "BOTH",

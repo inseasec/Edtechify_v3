@@ -204,7 +204,7 @@ const Career = () => {
   const [currentStep, setCurrentStep] = useState(0);
 
   const [activeTab, setActiveTab] = useState("new"); // 'new' | 'existing'
-  const [signupMode, setSignupMode] = useState("BOTH"); // NORMAL | EMAIL | MOBILE | BOTH
+  const [signupMode, setSignupMode] = useState("NORMAL"); // NORMAL | EMAIL | MOBILE | BOTH
   const [alreadyApplied, setAlreadyApplied] = useState({
     open: false,
     message: "",
@@ -244,8 +244,8 @@ const Career = () => {
     const fetchMode = async () => {
       try {
         const res = await api.get("/users/signup-mode");
-        const mode = String(res?.data?.mode || "BOTH").toUpperCase();
-        if (mounted) setSignupMode(["NORMAL", "EMAIL", "MOBILE", "BOTH"].includes(mode) ? mode : "BOTH");
+        const mode = String(res?.data?.mode || "NORMAL").toUpperCase();
+        if (mounted) setSignupMode(["NORMAL", "EMAIL", "MOBILE", "BOTH"].includes(mode) ? mode : "NORMAL");
       } catch {
         // keep default
       }

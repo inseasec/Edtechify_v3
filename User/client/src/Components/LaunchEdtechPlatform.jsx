@@ -535,7 +535,7 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
 
   const [errors, setErrors] = useState({});
   const [contactVerification, setContactVerification] = useState(createContactVerificationState);
-  const [signupMode, setSignupMode] = useState("BOTH");
+  const [signupMode, setSignupMode] = useState("NORMAL");
 
   const [form, setForm] = useState({
     contactPersonName: "",
@@ -590,10 +590,10 @@ export default function LaunchEdtechPlatform({ onPortalPresenceChange }) {
       try {
         const res = await api.get("/users/signup-mode");
         if (!cancelled) {
-          setSignupMode(String(res.data?.mode || "BOTH").toUpperCase());
+          setSignupMode(String(res.data?.mode || "NORMAL").toUpperCase());
         }
       } catch {
-        if (!cancelled) setSignupMode("BOTH");
+        if (!cancelled) setSignupMode("NORMAL");
       }
     })();
     return () => {

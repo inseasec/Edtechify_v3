@@ -59,7 +59,7 @@ const IconTwilio = () => (
 )
 
 export default function AuthenticationProviders() {
-  const [mode, setMode] = useState('BOTH')
+  const [mode, setMode] = useState('NORMAL')
   const [comm, setComm] = useState({
     USER_MAIL_HOST: '',
     USER_MAIL_PORT: '',

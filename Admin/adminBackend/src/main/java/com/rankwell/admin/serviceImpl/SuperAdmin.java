@@ -51,6 +51,10 @@ public class SuperAdmin implements CommandLineRunner {
         superAdmin.setName("Super Admin");
         superAdmin.setRole(Admins.Role.SUPER_ADMIN);
         superAdmin.setIsActive(true);
+        if (isNew) {
+            superAdmin.setIs2FAEnabled(false);
+            superAdmin.setIs2FAEmailEnabled(false);
+        }
 
         // Attach all departments if new
         if (isNew) {

@@ -4,7 +4,7 @@ import { resolveAuthIdentifier } from "./authIdentifier";
  * Builds JSON body for /users/signup and /users/signin (email or mobile + password).
  */
 export function buildAuthPayload(userData) {
-  const mode = userData.signupMode || "BOTH";
+  const mode = userData.signupMode || "NORMAL";
   const resolved = resolveAuthIdentifier(mode, {
     identifier: userData.identifier,
     phoneCountryCode: userData.phoneCountryCode,

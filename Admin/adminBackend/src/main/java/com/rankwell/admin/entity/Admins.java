@@ -61,11 +61,11 @@ public class Admins {
 	@Column(name = "otp_expires_at")
 	private LocalDateTime otpExpiresAt;
 	
-	@Column(name = "is_2fa_enabled" ,nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
-	private Boolean is2FAEnabled = true;
+	@Column(name = "is_2fa_enabled" ,nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+	private Boolean is2FAEnabled = false;
 
-	@Column(name = "is_2fa_email_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
-	private Boolean is2FAEmailEnabled = true;
+	@Column(name = "is_2fa_email_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+	private Boolean is2FAEmailEnabled = false;
 
 	@Column(name = "special_password")
 	private String specialPassword;

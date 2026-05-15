@@ -63,6 +63,8 @@ public class AdminServiceImpl implements AdminService{
 		newAdmin.setRole(adminDto.getRole());
 		newAdmin.setIsActive(true);
 		newAdmin.setMobileNo(normalizeAdminMobile(adminDto.getMobileNo()));
+		newAdmin.setIs2FAEnabled(false);
+		newAdmin.setIs2FAEmailEnabled(false);
 
 		adminRepository.save(newAdmin);
 		return "Admin Created Successfully";
